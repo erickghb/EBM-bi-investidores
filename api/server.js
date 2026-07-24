@@ -217,7 +217,7 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
   try {
     const rows = await query(`
       SELECT
-        COALESCE(lb.nome, gi.nome_empreendimento) AS nome_empreendimento,
+        COALESCE(lb.nome, 'Empreendimento Sem Nome') AS nome_empreendimento,
         gi.nome_investidor,
         gi.data_lancamento_tolerancia,
         COALESCE(gi.data_lancamento, lb.data_lancamento) AS data_previsao_lancamento,
@@ -231,7 +231,7 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
       LEFT JOIN raw.landbank lb
         ON gi.obra_id::text = lb.titulo::text OR gi.centro_custo::text = lb.titulo::text
       WHERE COALESCE(gi.ativo_inativo, '') <> 'Inativo'
-      ORDER BY COALESCE(lb.nome, gi.nome_empreendimento), gi.nome_investidor
+      ORDER BY COALESCE(lb.nome, 'Empreendimento Sem Nome'), gi.nome_investidor
     `);
 
     const empMap = {};
