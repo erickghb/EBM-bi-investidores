@@ -1,0 +1,24 @@
+# Variáveis de ambiente — nunca commitar este arquivo
+.env
+
+# Ambiente virtual Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Dados brutos (sensíveis — manter fora do git)
+data/
+
+# Artefatos de build e temporários
+*.egg-info/
+dist/
+build/
+
+# Node.js
+node_modules/
+api/node_modules/
+npm-debug.log*
+
+# Logs
+*.log

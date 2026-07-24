@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EBM Inteligência - Dashboard de Investidores</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <span class="dot"></span>
+      EBM Inteligência
+    </div>
+    <nav class="sidebar__nav">
+      <a href="#" class="active" data-page="gestao">Gestão à Vista</a>
+      <a href="#" data-page="acompanhamento">Acompanhamento $</a>
+      <a href="#" data-page="aniversarios">Aniversários</a>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    
+    <!-- Page: Gestão à Vista -->
+    <div id="page-gestao" class="page active">
+      <header class="page__header" style="position: relative; overflow: hidden; padding: 32px; border-radius: 12px; background: var(--navy); color: var(--white); margin-bottom: 32px;">
+        <!-- Grafismo de Fundo -->
+        <svg id="header-net" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;"></svg>
+        
+        <div style="position: relative; z-index: 1;">
+          <!-- Linha 1: título + cards 2026 -->
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+            <div>
+              <h1 style="color: var(--white); margin-bottom: 4px;">Controle de Investidores</h1>
+              <p class="page__subtitle" style="color: var(--gray-300);">Gestão à Vista</p>
+            </div>
+
+            <!-- Cards Investimentos 2026 -->
+            <div style="display: flex; gap: 16px; align-items: stretch;">
+              <div style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 16px 24px; text-align: center; backdrop-filter: blur(4px);">
+                <div style="font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">Investimentos em 2026</div>
+                <div class="mono" id="kpi-2026-investido" style="font-size: 26px; color: var(--white); font-weight: 600;">—</div>
+              </div>
+
+              <!-- Barra de progresso -->
+              <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; min-width: 120px;">
+                <div style="font-size: 11px; color: rgba(255,255,255,0.6); text-align: center;" id="kpi-2026-perc-label">—% da meta</div>
+                <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.15); border-radius: 99px; overflow: hidden;">
+                  <div id="kpi-2026-bar" style="height: 100%; width: 0%; background: #E30A12; border-radius: 99px; transition: width 0.8s ease;"></div>
+                </div>
+              </div>
+
+              <div style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 16px 24px; text-align: center; backdrop-filter: blur(4px);">
+                <div style="font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">Meta 2026 (Mútuo+SCP)</div>
+                <div class="mono" id="kpi-2026-meta" style="font-size: 26px; color: var(--white); font-weight: 600;">20 Mi</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Linha 2: KPIs gerais (menores) -->
+          <div style="display: flex; gap: 16px;">
+            <div style="background: var(--white); padding: 10px 20px; border-radius: 10px; display: flex; gap: 20px; align-items: center;">
+              <div style="text-align: center;">
+                <div style="font-size: 10px; color: var(--gray-600); font-weight: 600; text-transform: uppercase;">Total Investido</div>
+                <div class="mono" id="kpi-total-investido" style="font-size: 16px; color: var(--navy); font-weight: 500;">—</div>
+              </div>
+              <div style="width: 1px; background: var(--hair);"></div>
+              <div style="text-align: center;">
+                <div style="font-size: 10px; color: var(--gray-600); font-weight: 600; text-transform: uppercase;">APL Investidores</div>
+                <div class="mono" id="kpi-total-apl" style="font-size: 16px; color: var(--navy); font-weight: 500;">—</div>
+              </div>
+              <div style="width: 1px; background: var(--hair);"></div>
+              <div style="text-align: center;">
+                <div style="font-size: 10px; color: var(--gray-600); font-weight: 600; text-transform: uppercase;">Registros Ativos</div>
+                <div class="mono" id="kpi-qtd-registros" style="font-size: 16px; color: var(--navy); font-weight: 500;">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+
+      <!-- Tabela Controle de Investidores -->
+      <section class="table-section">
+        <div class="section-head">
+          <h2>Controle de Investidores</h2>
+        </div>
+
+        <div class="filters-panel">
+          <div class="filters-grid">
+            <div class="filter-group">
+              <label for="filter-empreendimento">Nome do Empreendimento</label>
+              <select id="filter-empreendimento"><option value="Todos">Todos</option></select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-investidor">Nome do Investidor</label>
+              <select id="filter-investidor"><option value="Todos">Todos</option></select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-lancado">Empreendimento Lançado</label>
+              <select id="filter-lancado"><option value="Todos">Todos</option><option value="Sim">Sim</option><option value="Não">Não</option></select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-tipo">Tipo de Investimento</label>
+              <select id="filter-tipo"><option value="Todos">Todos</option></select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-intermediador">Intermediador</label>
+              <select id="filter-intermediador"><option value="Todos">Todos</option></select>
+            </div>
+            <div class="filter-group">
+              <label for="filter-data">Data de Assinatura</label>
+              <select id="filter-data"><option value="Todos">Todos</option></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-container">
+          <table class="data-table" id="table-controle">
+            <thead>
+              <tr>
+                <th style="width: 35%;">Nome do Empreendimento</th>
+                <th style="text-align: right;">Valor Investido</th>
+                <th style="text-align: right;">APL Investidor</th>
+                <th style="text-align: right;">APL do Empreendimento</th>
+                <th style="text-align: right;">% APL Comprometida</th>
+                <th style="text-align: center;">Intermediador</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Data will be injected via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── INDICADOR 1: Valor Investido por Ano ── -->
+      <section class="table-section" style="margin-top: 32px;">
+        <div class="section-head">
+          <h2>Valor Investido ao Longo do Tempo por Ano</h2>
+        </div>
+        <div style="display: flex; gap: 24px; align-items: flex-start;">
+          <!-- Gráfico de barras -->
+          <div style="flex: 1; min-height: 280px; position: relative;">
+            <canvas id="chart-investido-por-ano"></canvas>
+          </div>
+          <!-- Tabela resumo ao lado -->
+          <div style="min-width: 260px;">
+            <table class="data-table" id="table-investido-por-ano">
+              <thead>
+                <tr>
+                  <th>Ano</th>
+                  <th style="text-align:right;">Valor Investido</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+              <tfoot>
+                <tr style="font-weight:700; border-top: 2px solid var(--navy);">
+                  <td>Total</td>
+                  <td class="numeric" id="kpi-total-graf">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── INDICADOR 2: Acompanhamento de Empreendimentos ── -->
+      <section class="table-section" style="margin-top: 32px;">
+        <div class="section-head">
+          <h2>Acompanhamento de Empreendimentos</h2>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="table-acompanhamento">
+            <thead>
+              <tr>
+                <th style="width:20%;">Nome do Empreendimento</th>
+                <th>Data de Lançamento com Tolerância</th>
+                <th>Data de Previsão de Lançamento</th>
+                <th>Data de Conclusão com Tolerância</th>
+                <th>Penalidade Lançamento</th>
+                <th>Penalidade Conclusão</th>
+                <th>Plano de Ação</th>
+                <th>Intermediador</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Outras páginas (futuro) -->
+    <div id="page-acompanhamento" class="page">
+
+      <!-- Header da tela -->
+      <header class="page__header" style="position:relative;overflow:hidden;padding:28px 32px;border-radius:12px;background:var(--navy);color:var(--white);margin-bottom:32px;">
+        <svg id="header-net-acomp" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></svg>
+        <div style="position:relative;z-index:1;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+            <div>
+              <h1 style="color:var(--white);margin-bottom:4px;">Acompanhamento de Investidores</h1>
+              <p class="page__subtitle" style="color:var(--gray-300);">Fluxo de Entrada — Receita Acumulada</p>
+            </div>
+            <!-- KPIs header -->
+            <div style="display:flex;gap:12px;">
+              <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:12px 20px;text-align:center;">
+                <div style="font-size:10px;color:rgba(255,255,255,0.7);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Soma de Realizado</div>
+                <div class="mono" id="acomp-kpi-realizado" style="font-size:22px;color:var(--white);font-weight:600;">—</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:12px 20px;text-align:center;">
+                <div style="font-size:10px;color:rgba(255,255,255,0.7);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Soma de A Realizar</div>
+                <div class="mono" id="acomp-kpi-a-realizar" style="font-size:22px;color:var(--white);font-weight:600;">—</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:12px 20px;text-align:center;">
+                <div style="font-size:10px;color:rgba(255,255,255,0.7);font-weight:600;text-transform:uppercase;margin-bottom:4px;">Total (Real + A Realizar)</div>
+                <div class="mono" id="acomp-kpi-total" style="font-size:22px;color:var(--white);font-weight:600;">—</div>
+              </div>
+            </div>
+          </div>
+          <!-- Filtros -->
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div class="filter-group" style="min-width:220px;">
+              <label for="acomp-filter-investidor" style="color:rgba(255,255,255,0.7);">Investidor</label>
+              <select id="acomp-filter-investidor"><option value="">Todos</option></select>
+            </div>
+            <div class="filter-group" style="min-width:220px;">
+              <label for="acomp-filter-empreendimento" style="color:rgba(255,255,255,0.7);">Empreendimento</label>
+              <select id="acomp-filter-empreendimento"><option value="">Todos</option></select>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- RECEITA + A RECEBER lado a lado -->
+      <div style="display:flex;gap:24px;align-items:flex-start;">
+
+        <!-- Tabela RECEITA (esquerda) -->
+        <section class="table-section" style="flex:1;">
+          <div class="section-head"><h2>Receita</h2></div>
+          <div class="table-container">
+            <table class="data-table" id="table-receita">
+              <thead>
+                <tr>
+                  <th>Ano / Mês</th>
+                  <th style="text-align:right;">R$ Receita</th>
+                  <th style="text-align:right;">R$ Receita Acumulada</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-receita"></tbody>
+              <tfoot>
+                <tr style="font-weight:700;border-top:2px solid var(--navy);">
+                  <td>Total</td>
+                  <td class="numeric" id="acomp-total-receita">—</td>
+                  <td class="numeric" id="acomp-total-acumulada">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+
+        <!-- Tabela A RECEBER (direita) -->
+        <section class="table-section" style="min-width:300px;">
+          <div class="section-head"><h2>R$ A Receber</h2></div>
+          <div class="table-container">
+            <table class="data-table" id="table-a-receber">
+              <thead>
+                <tr>
+                  <th>Ano / Mês</th>
+                  <th style="text-align:right;">R$ A Receber</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-a-receber"></tbody>
+              <tfoot>
+                <tr style="font-weight:700;border-top:2px solid var(--navy);">
+                  <td>Total</td>
+                  <td class="numeric" id="acomp-total-a-receber">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      <!-- CONTRATOS ASSINADOS -->
+      <section class="table-section" style="margin-top: 32px;">
+        <div style="background: #C41C24; color: #ffffff; padding: 10px 20px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 6px 6px 0 0;">
+          CONTRATOS ASSINADOS
+        </div>
+        <div class="table-container" style="border-radius: 0 0 8px 8px; border: 1px solid var(--gray-200); border-top: none; padding: 16px; background: #ffffff;">
+          <table class="data-table" id="table-contratos-assinados" style="max-width: 600px;">
+            <thead>
+              <tr style="background: var(--navy); color: #ffffff;">
+                <th style="color: #ffffff;">Ano / Mês</th>
+                <th style="text-align:right; color: #ffffff;">R$ Contratos</th>
+                <th style="text-align:right; color: #ffffff;">R$ Contratos Acumulados</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-contratos-assinados"></tbody>
+            <tfoot>
+              <tr style="font-weight:700; border-top: 2px solid var(--navy); background: var(--navy); color: #ffffff;">
+                <td style="color: #ffffff;">Total</td>
+                <td class="numeric" id="acomp-total-contratos" style="color: #ffffff;">—</td>
+                <td class="numeric" id="acomp-total-contratos-acumulado" style="color: #ffffff;">—</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+    </div>
+
+
+
+    <div id="page-aniversarios" class="page">
+      <header class="page__header">
+        <h1>Aniversários</h1>
+      </header>
+      <p>Em desenvolvimento...</p>
+    </div>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ebm-api
+    env: node
+    rootDir: api
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false   # você vai colar o valor no painel do Render
+      - key: NODE_ENV
+        value: production
