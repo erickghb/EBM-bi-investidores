@@ -215,38 +215,50 @@ app.get('/api/grafico/investido-por-ano', async (req, res) => {
 // ── Gráfico 2: Acompanhamento de Empreendimentos ─────────────────
 app.get('/api/grafico/acompanhamento', async (req, res) => {
   try {
-    const rows = await query(`
-      SELECT
-        COALESCE(lb.nome, gi.nome_empreendimento) AS nome_empreendimento,
-        COALESCE(lb.titulo, gi.obra_id)          AS titulo,
-        lb.data_lancamento                      AS data_previsao_lancamento,
-        gi.nome_investidor,
-        gi.data_lancamento_tolerancia,
-        gi.data_conclusao_tolerancia,
-        gi.penalidade_lancamento,
-        gi.penalidade_conclusao,
-        gi.plano_de_acao,
-        gi.nome_intermediador                   AS intermediador
-      FROM raw.gestao_investidores gi
-      LEFT JOIN raw.landbank lb
-        ON gi.obra_id = lb.titulo OR gi.centro_custo = lb.titulo
-      WHERE (lb.nome IS NOT NULL OR gi.nome_empreendimento IS NOT NULL)
-        AND COALESCE(gi.ativo_inativo, '') <> 'Inativo'
-      ORDER BY COALESCE(lb.nome, gi.nome_empreendimento), gi.nome_investidor
-    `);
+    let rows = [];
+    try {
+      rows = await query(`
+        SELECT
+          ci.nome_empreendimento,
+          ci.nome_investidor,
+          ci.data_lancamento_tolerancia,
+          ci.data_conclusao_tolerancia,
+          ci.penalidade_lancamento,
+          ci.plano_de_acao,
+          ci.intermediador,
+          lb.data_lancamento AS data_previsao_lancamento
+        FROM analytics.v_controle_investidores ci
+        LEFT JOIN raw.landbank lb
+          ON ci.nome_empreendimento = lb.nome OR ci.obra_id::text = lb.titulo::text
+        ORDER BY ci.nome_empreendimento, ci.nome_investidor
+      `);
+    } catch (err1) {
+      console.warn("v_controle_investidores join fallback:", err1.message);
+      rows = await query(`
+        SELECT
+          nome_empreendimento,
+          nome_investidor,
+          data_lancamento_tolerancia,
+          data_conclusao_tolerancia,
+          penalidade_lancamento,
+          plano_de_acao,
+          intermediador
+        FROM analytics.v_controle_investidores
+        ORDER BY nome_empreendimento, nome_investidor
+      `);
+    }
 
     const empMap = {};
-    rows.forEach(r => {
+    (rows || []).forEach(r => {
       const emp = r.nome_empreendimento || 'Outros';
       if (!empMap[emp]) {
         empMap[emp] = {
           nome_empreendimento: emp,
-          titulo: r.titulo,
           data_previsao_lancamento: r.data_previsao_lancamento || '-',
           data_conclusao_tolerancia: r.data_conclusao_tolerancia || '-',
           data_lancamento_tolerancia: r.data_lancamento_tolerancia || '-',
           penalidade_lancamento: r.penalidade_lancamento || '-',
-          penalidade_conclusao: r.penalidade_conclusao || '-',
+          penalidade_conclusao: '-',
           plano_de_acao: r.plano_de_acao || '-',
           intermediador: r.intermediador || '-',
           investidores: []
@@ -258,7 +270,7 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         data_previsao_lancamento: r.data_previsao_lancamento || '-',
         penalidade_lancamento: r.penalidade_lancamento || '-',
         data_conclusao_tolerancia: r.data_conclusao_tolerancia || '-',
-        penalidade_conclusao: r.penalidade_conclusao || '-',
+        penalidade_conclusao: '-',
         plano_de_acao: r.plano_de_acao || '-',
         intermediador: r.intermediador || '-'
       });
