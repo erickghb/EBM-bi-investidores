@@ -111,11 +111,49 @@ app.get('/api/controle', async (req, res) => {
       ORDER BY nome_empreendimento, nome_investidor
     `, params);
 
-    // KPIs
-    const total_investido = records.reduce((s, r) => s + parseFloat(r.valor_investido || 0), 0);
-    const total_apl       = records.reduce((s, r) => s + parseFloat(r.apl_investidor  || 0), 0);
+    const parsedRecords = records.map(r => ({
+      ...r,
+      valor_investido: parseFloat(r.valor_investido || 0),
+      apl_investidor: parseFloat(r.apl_investidor || 0),
+      apl_empreendimento: parseFloat(r.apl_empreendimento || 0),
+      perc_apl_comprometida: parseFloat(r.perc_apl_comprometida || 0)
+    }));
 
-    res.json({ records, kpis: { total_investido, total_apl, qtd_registros: records.length } });
+    // Agrupa por empreendimento para facilitar a renderização no frontend
+    const empMap = {};
+    parsedRecords.forEach(r => {
+      const emp = r.nome_empreendimento || 'Outros';
+      if (!empMap[emp]) {
+        empMap[emp] = {
+          nome_empreendimento: emp,
+          total_investido: 0,
+          apl_empreendimento: r.apl_empreendimento || 0,
+          investidores: []
+        };
+      }
+      empMap[emp].total_investido += r.valor_investido;
+      empMap[emp].investidores.push(r);
+    });
+
+    const empreendimentos = Object.values(empMap).map(e => ({
+      ...e,
+      total_investido: parseFloat(e.total_investido.toFixed(2)),
+      qtd_investidores: e.investidores.length
+    }));
+
+    // KPIs
+    const total_investido = parsedRecords.reduce((s, r) => s + r.valor_investido, 0);
+    const total_apl       = parsedRecords.reduce((s, r) => s + r.apl_investidor, 0);
+
+    res.json({
+      records: parsedRecords,
+      empreendimentos,
+      kpis: {
+        total_investido: parseFloat(total_investido.toFixed(2)),
+        total_apl: parseFloat(total_apl.toFixed(2)),
+        qtd_registros: parsedRecords.length
+      }
+    });
   } catch (err) {
     console.error('/api/controle error:', err.message);
     res.status(500).json({ error: err.message });
@@ -153,8 +191,13 @@ app.get('/api/grafico/investido-por-ano', async (req, res) => {
       GROUP BY ano
       ORDER BY ano
     `);
-    const total = rows.reduce((s, r) => s + parseFloat(r.total_investido || 0), 0);
-    res.json({ por_ano: rows, total });
+    const parsedRows = rows.map(r => ({
+      ano: r.ano,
+      total_investido: parseFloat(parseFloat(r.total_investido || 0).toFixed(2)),
+      qtd_investidores: parseInt(r.qtd_investidores || 0, 10)
+    }));
+    const total = parsedRows.reduce((s, r) => s + r.total_investido, 0);
+    res.json({ por_ano: parsedRows, total: parseFloat(total.toFixed(2)) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -182,7 +225,14 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         AND COALESCE(gi.ativo_inativo, '') <> 'Inativo'
       ORDER BY lb.titulo, gi.data_lancamento_tolerancia NULLS LAST
     `);
-    res.json(rows);
+    const parsedRows = rows.map(r => ({
+      ...r,
+      qtd_investidores: parseInt(r.qtd_investidores || 0, 10),
+      data_lancamento_tolerancia: r.data_lancamento_tolerancia || '-',
+      data_previsao_lancamento: r.data_previsao_lancamento || '-',
+      data_conclusao_tolerancia: r.data_conclusao_tolerancia || '-'
+    }));
+    res.json(parsedRows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
