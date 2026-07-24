@@ -61,11 +61,20 @@ app.get('/api/dimensoes', async (req, res) => {
              ORDER BY nome_intermediador`),
     ]);
 
+    const periodos = await query(`
+      SELECT DISTINCT SUBSTRING(data_assinatura FROM '[0-9]{4}') AS ano
+      FROM raw.gestao_investidores
+      WHERE data_assinatura IS NOT NULL AND data_assinatura ~ '[0-9]{4}'
+      ORDER BY ano DESC
+    `);
+
     res.json({
       empreendimentos,
       investidores,
       tipos_investimento: tipos.map(r => r.tipo),
       intermediadores:    intermediadores.map(r => r.intermediador),
+      empreendimento_lancado: ["Sim", "Não"],
+      periodos: periodos.map(r => r.ano)
     });
   } catch (err) {
     console.error('/api/dimensoes error:', err.message);
