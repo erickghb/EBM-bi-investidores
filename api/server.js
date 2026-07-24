@@ -69,12 +69,12 @@ app.get('/api/dimensoes', async (req, res) => {
     `);
 
     res.json({
-      empreendimentos,
-      investidores,
-      tipos_investimento: tipos.map(r => r.tipo),
-      intermediadores:    intermediadores.map(r => r.intermediador),
+      empreendimentos: empreendimentos.map(r => (typeof r === 'string' ? r : (r.nome || r.titulo || ''))).filter(Boolean),
+      investidores:    investidores.map(r => (typeof r === 'string' ? r : (r.nome_investidor || ''))).filter(Boolean),
+      tipos_investimento: tipos.map(r => r.tipo).filter(Boolean),
+      intermediadores:    intermediadores.map(r => r.intermediador).filter(Boolean),
       empreendimento_lancado: ["Sim", "Não"],
-      periodos: periodos.map(r => r.ano)
+      periodos: periodos.map(r => r.ano).filter(Boolean)
     });
   } catch (err) {
     console.error('/api/dimensoes error:', err.message);
