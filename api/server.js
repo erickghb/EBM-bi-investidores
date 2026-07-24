@@ -217,17 +217,21 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
   try {
     const rows = await query(`
       SELECT
-        ci.nome_empreendimento,
-        ci.nome_investidor,
-        ci.data_lancamento_tolerancia,
-        ci.data_conclusao_tolerancia,
-        ci.plano_de_acao,
-        ci.intermediador,
-        lb.data_lancamento AS data_previsao_lancamento
-      FROM analytics.v_controle_investidores ci
+        COALESCE(lb.nome, gi.nome_empreendimento) AS nome_empreendimento,
+        gi.nome_investidor,
+        gi.data_lancamento_tolerancia,
+        COALESCE(gi.data_lancamento, lb.data_lancamento) AS data_previsao_lancamento,
+        gi.penalidade_lancamento,
+        gi.data_conclusao_tolerancia,
+        gi.data_conclusao AS data_previsao_conclusao,
+        gi.penalidade_conclusao,
+        gi.plano_de_acao,
+        gi.nome_intermediador AS intermediador
+      FROM raw.gestao_investidores gi
       LEFT JOIN raw.landbank lb
-        ON ci.nome_empreendimento = lb.nome
-      ORDER BY ci.nome_empreendimento, ci.nome_investidor
+        ON gi.obra_id::text = lb.titulo::text OR gi.centro_custo::text = lb.titulo::text
+      WHERE COALESCE(gi.ativo_inativo, '') <> 'Inativo'
+      ORDER BY COALESCE(lb.nome, gi.nome_empreendimento), gi.nome_investidor
     `);
 
     const empMap = {};
@@ -239,8 +243,9 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
           data_previsao_lancamento: r.data_previsao_lancamento || '-',
           data_conclusao_tolerancia: r.data_conclusao_tolerancia || '-',
           data_lancamento_tolerancia: r.data_lancamento_tolerancia || '-',
-          penalidade_lancamento: '-',
-          penalidade_conclusao: '-',
+          penalidade_lancamento: r.penalidade_lancamento || '-',
+          penalidade_conclusao: r.penalidade_conclusao || '-',
+          data_previsao_conclusao: r.data_previsao_conclusao || '-',
           plano_de_acao: r.plano_de_acao || '-',
           intermediador: r.intermediador || '-',
           investidores: []
@@ -250,9 +255,10 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         nome_investidor: r.nome_investidor || 'Investidor',
         data_lancamento_tolerancia: r.data_lancamento_tolerancia || '-',
         data_previsao_lancamento: r.data_previsao_lancamento || '-',
-        penalidade_lancamento: '-',
+        penalidade_lancamento: r.penalidade_lancamento || '-',
         data_conclusao_tolerancia: r.data_conclusao_tolerancia || '-',
-        penalidade_conclusao: '-',
+        data_previsao_conclusao: r.data_previsao_conclusao || '-',
+        penalidade_conclusao: r.penalidade_conclusao || '-',
         plano_de_acao: r.plano_de_acao || '-',
         intermediador: r.intermediador || '-'
       });
