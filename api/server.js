@@ -271,11 +271,35 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     const emps = await query(`SELECT DISTINCT empreendimento FROM raw.fluxo_entrada WHERE empreendimento IS NOT NULL ORDER BY empreendimento`);
     const invs = await query(`SELECT DISTINCT investidor FROM raw.fluxo_entrada WHERE investidor IS NOT NULL ORDER BY investidor`);
 
+    const mensalParsed = mensal.map(r => ({
+      ano: r.ano,
+      mes: r.mes,
+      receita_mes: parseFloat(r.receita_mes || 0),
+      a_realizar_mes: parseFloat(r.a_realizar_mes || 0),
+      receita_acumulada: parseFloat(r.receita_acumulada || 0)
+    }));
+
+    const aReceberParsed = a_receber.map(r => ({
+      ano: r.ano,
+      mes: r.mes,
+      valor: parseFloat(r.valor || 0)
+    }));
+
+    const contratosParsed = contratos_assinados.map(r => ({
+      ano: r.ano,
+      mes: r.mes,
+      valor_mes: parseFloat(r.valor_mes || 0),
+      valor_acumulado: parseFloat(r.valor_acumulado || 0)
+    }));
+
     res.json({
-      mensal,
-      a_receber,
-      contratos_assinados,
-      kpis: kpis[0] || { total_realizado: 0, total_a_realizar: 0 },
+      mensal: mensalParsed,
+      a_receber: aReceberParsed,
+      contratos_assinados: contratosParsed,
+      kpis: {
+        total_realizado: parseFloat(kpis[0]?.total_realizado || 0),
+        total_a_realizar: parseFloat(kpis[0]?.total_a_realizar || 0),
+      },
       dimensoes: {
         empreendimentos: emps.map(r => r.empreendimento),
         investidores:    invs.map(r => r.investidor),
