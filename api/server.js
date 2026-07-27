@@ -308,12 +308,12 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     const mensal = await query(`
       WITH mensal AS (
         SELECT
-          EXTRACT(YEAR  FROM data_pagamento)::INT AS ano,
-          EXTRACT(MONTH FROM data_pagamento)::INT AS mes,
-          SUM(COALESCE(realizado, 0))             AS receita_mes,
-          SUM(COALESCE(a_realizar, 0))            AS a_realizar_mes
+          SUBSTRING(data_pagamento FROM 1 FOR 4)::INT AS ano,
+          SUBSTRING(data_pagamento FROM 6 FOR 2)::INT AS mes,
+          SUM(COALESCE(realizado, 0))                 AS receita_mes,
+          SUM(COALESCE(previsto, 0))                  AS a_realizar_mes
         FROM raw.fluxo_entrada
-        WHERE ${where}
+        WHERE ${where} AND data_pagamento ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
         GROUP BY 1, 2
       )
       SELECT ano, mes, receita_mes, a_realizar_mes,
@@ -325,19 +325,19 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     // KPIs totais
     const kpis = await query(`
       SELECT
-        SUM(COALESCE(realizado, 0))  AS total_realizado,
-        SUM(COALESCE(a_realizar, 0)) AS total_a_realizar
+        SUM(COALESCE(realizado, 0)) AS total_realizado,
+        SUM(COALESCE(previsto, 0))  AS total_a_realizar
       FROM raw.fluxo_entrada WHERE ${where}
     `, params);
 
     // Parcelas a receber futuras
     const a_receber = await query(`
       SELECT
-        EXTRACT(YEAR  FROM data_pagamento)::INT AS ano,
-        EXTRACT(MONTH FROM data_pagamento)::INT AS mes,
-        SUM(COALESCE(a_realizar, 0))            AS valor
+        SUBSTRING(data_pagamento FROM 1 FOR 4)::INT AS ano,
+        SUBSTRING(data_pagamento FROM 6 FOR 2)::INT AS mes,
+        SUM(COALESCE(previsto, 0))                  AS valor
       FROM raw.fluxo_entrada
-      WHERE ${where} AND a_realizar > 0
+      WHERE ${where} AND COALESCE(previsto, 0) > 0 AND data_pagamento ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
       GROUP BY 1, 2 ORDER BY 1, 2
     `, params);
 
