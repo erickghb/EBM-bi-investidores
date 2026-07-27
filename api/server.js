@@ -339,21 +339,18 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     if (investidor)     { cParams.push(investidor);     contratosConditions.push(`investidor ILIKE $${cParams.length}`); }
     const cWhere = contratosConditions.map(c => `(${c})`).join(' AND ');
 
-    const contratos_assinados = await query(`
-      WITH mensal AS (
-        SELECT
-          EXTRACT(YEAR  FROM data_assinatura)::INT AS ano,
-          EXTRACT(MONTH FROM data_assinatura)::INT AS mes,
-          SUM(COALESCE(valor_contrato, 0))        AS valor_mes
-        FROM raw.apl_vlr_contrato
-        WHERE ${cWhere}
-        GROUP BY 1, 2
-      )
-      SELECT ano, mes, valor_mes,
-        SUM(valor_mes) OVER (ORDER BY ano, mes ROWS UNBOUNDED PRECEDING) AS valor_acumulado
-      FROM mensal
-      ORDER BY ano, mes
-    `, cParams);
+    const contratos_detalhado = await query(`
+      SELECT
+        id,
+        COALESCE(empreendimento, 'Empreendimento') AS empreendimento,
+        COALESCE(investidor, 'Investidor') AS investidor,
+        data_assinatura_contrato,
+        SUBSTRING(data_assinatura_contrato FROM '[0-9]{4}')::INT AS ano,
+        valor_contrato::float AS valor_contrato
+      FROM raw.apl_valor_contrato
+      WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
+      ORDER BY SUBSTRING(data_assinatura_contrato FROM '[0-9]{4}') ASC NULLS LAST, empreendimento, investidor
+    `);
 
     // Dropdowns desta tela
     const emps = await query(`SELECT DISTINCT empreendimento FROM raw.fluxo_entrada WHERE empreendimento IS NOT NULL ORDER BY empreendimento`);
@@ -373,11 +370,13 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       valor: parseFloat(r.valor || 0)
     }));
 
-    const contratosParsed = contratos_assinados.map(r => ({
-      ano: r.ano,
-      mes: r.mes,
-      valor_mes: parseFloat(r.valor_mes || 0),
-      valor_acumulado: parseFloat(r.valor_acumulado || 0)
+    const contratosParsed = (contratos_detalhado || []).map(r => ({
+      id: r.id,
+      empreendimento: r.empreendimento,
+      investidor: r.investidor,
+      data_assinatura: r.data_assinatura_contrato,
+      ano: r.ano || 2024,
+      valor_contrato: parseFloat(r.valor_contrato || 0)
     }));
 
     res.json({
