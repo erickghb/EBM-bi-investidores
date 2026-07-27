@@ -217,7 +217,7 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
   try {
     const rows = await query(`
       SELECT
-        COALESCE(lb.nome, 'Empreendimento Sem Nome') AS nome_empreendimento,
+        lb.nome AS nome_empreendimento,
         gi.nome_investidor,
         gi.data_lancamento_tolerancia,
         COALESCE(gi.data_lancamento, lb.data_lancamento) AS data_previsao_lancamento,
@@ -228,10 +228,22 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         gi.plano_de_acao,
         gi.nome_intermediador AS intermediador
       FROM raw.gestao_investidores gi
-      LEFT JOIN raw.landbank lb
+      JOIN raw.landbank lb
         ON gi.obra_id::text = lb.titulo::text OR gi.centro_custo::text = lb.titulo::text
       WHERE COALESCE(gi.ativo_inativo, '') <> 'Inativo'
-      ORDER BY COALESCE(lb.nome, 'Empreendimento Sem Nome'), gi.nome_investidor
+        AND (
+          lb.nome ILIKE '%Palmeiras%'
+          OR lb.nome ILIKE '%Mansões%'
+          OR lb.nome ILIKE '%Cambuí%'
+          OR lb.nome ILIKE '%Alpes%'
+          OR lb.nome ILIKE '%J19%'
+          OR lb.nome ILIKE '%Gran Plaza%'
+          OR lb.nome ILIKE '%Metropolitan Marista%'
+          OR lb.nome ILIKE '%Ipê%'
+          OR lb.nome ILIKE '%106%'
+          OR lb.nome ILIKE '%Gran%'
+        )
+      ORDER BY lb.nome, gi.nome_investidor
     `);
 
     const empMap = {};
