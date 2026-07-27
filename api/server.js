@@ -357,11 +357,12 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
         COALESCE(empreendimento, 'Empreendimento') AS empreendimento,
         COALESCE(investidor, 'Investidor') AS investidor,
         data_assinatura_contrato,
-        SUBSTRING(data_assinatura_contrato FROM '[0-9]{4}')::INT AS ano,
+        SUBSTRING(data_assinatura_contrato FROM 1 FOR 4)::INT AS ano,
         valor_contrato::float AS valor_contrato
       FROM raw.apl_valor_contrato
       WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
-      ORDER BY SUBSTRING(data_assinatura_contrato FROM '[0-9]{4}') ASC NULLS LAST, empreendimento, investidor
+        AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
+      ORDER BY SUBSTRING(data_assinatura_contrato FROM 1 FOR 4) ASC NULLS LAST, empreendimento, investidor
     `);
 
     // Dropdowns desta tela
