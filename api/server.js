@@ -358,7 +358,8 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
         SUBSTRING(data_assinatura_contrato FROM 1 FOR 4)::INT AS ano,
         EXTRACT(MONTH FROM TO_DATE(data_assinatura_contrato, 'YYYY-MM-DD'))::INT AS mes_num,
         TO_CHAR(TO_DATE(data_assinatura_contrato, 'YYYY-MM-DD'), 'Month') AS mes_name_raw,
-        valor_contrato::float AS valor_contrato
+        valor_contrato::float AS valor_contrato,
+        COALESCE(status, 'VÁLIDO') AS status
       FROM raw.apl_valor_contrato
       WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
         AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
