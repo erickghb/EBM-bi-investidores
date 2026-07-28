@@ -378,6 +378,22 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
         AND UPPER(TRIM(COALESCE(status, ''))) = 'VÁLIDO'
     `);
 
+    // Receita detalhada por Empreendimento e Investidor (da tabela raw.fluxo_entrada)
+    const receita_detalhada = await query(`
+      SELECT
+        id,
+        COALESCE(empreendimento, 'Empreendimento') AS empreendimento,
+        COALESCE(investidor, 'Investidor') AS investidor,
+        data_pagamento,
+        SUBSTRING(data_pagamento FROM 1 FOR 4)::INT AS ano,
+        EXTRACT(MONTH FROM TO_DATE(data_pagamento, 'YYYY-MM-DD'))::INT AS mes_num,
+        realizado::float AS receita_mes
+      FROM raw.fluxo_entrada
+      WHERE ${where} AND data_pagamento ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        AND realizado::float > 0
+      ORDER BY data_pagamento ASC, id ASC
+    `, params);
+
     // Dropdowns desta tela
     const emps = await query(`SELECT DISTINCT empreendimento FROM raw.fluxo_entrada WHERE empreendimento IS NOT NULL ORDER BY empreendimento`);
     const invs = await query(`SELECT DISTINCT investidor FROM raw.fluxo_entrada WHERE investidor IS NOT NULL ORDER BY investidor`);
@@ -399,6 +415,17 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     // Nomes dos meses em pt-BR (TO_CHAR do Postgres retorna em inglês — mapeamos aqui)
     const mesNomesPTBR = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
+    const receitaDetalhadaParsed = (receita_detalhada || []).map(r => ({
+      id: r.id,
+      empreendimento: r.empreendimento,
+      investidor: r.investidor,
+      data_pagamento: r.data_pagamento,
+      ano: r.ano,
+      mes_num: r.mes_num || 1,
+      mes_name: mesNomesPTBR[r.mes_num || 1] || 'Janeiro',
+      receita_mes: parseFloat(r.receita_mes || 0)
+    }));
+
     const contratosParsed = (contratos_detalhado || []).map(r => ({
       id: r.id,
       empreendimento: r.empreendimento,
@@ -412,6 +439,7 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
 
     res.json({
       mensal: mensalParsed,
+      receita_detalhada: receitaDetalhadaParsed,
       a_receber: aReceberParsed,
       contratos_assinados: contratosParsed,
       kpis: {
