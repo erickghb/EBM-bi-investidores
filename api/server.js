@@ -341,16 +341,10 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       GROUP BY 1, 2 ORDER BY 1, 2
     `, params);
 
-    // Contratos Assinados (da tabela raw.apl_vlr_contrato)
-    const contratosConditions = [
-      "data_assinatura IS NOT NULL",
-      "status NOT IN ('DEVOLVIDO C/CORRECAO', 'DEVOLVIDO C/CORREÇÃO')"
-    ];
-    const cParams = [];
-    if (empreendimento) { cParams.push(empreendimento); contratosConditions.push(`empreendimento ILIKE $${cParams.length}`); }
-    if (investidor)     { cParams.push(investidor);     contratosConditions.push(`investidor ILIKE $${cParams.length}`); }
-    const cWhere = contratosConditions.map(c => `(${c})`).join(' AND ');
-
+    // Contratos Assinados (da tabela raw.apl_valor_contrato)
+    // Regra de negócio: somente contratos com status VÁLIDO são considerados.
+    // Status MIGRADO/UNIDADE NO 675, MIGRADO P/ SERRINHA e DEVOLVIDO C/CORREÇÃO são excluídos
+    // pois representam contratos transferidos ou cancelados, não devendo compor o portfólio ativo.
     const contratos_detalhado = await query(`
       SELECT
         id,
@@ -362,6 +356,7 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       FROM raw.apl_valor_contrato
       WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
         AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
+        AND UPPER(TRIM(COALESCE(status, ''))) = 'VÁLIDO'
       ORDER BY SUBSTRING(data_assinatura_contrato FROM 1 FOR 4) ASC NULLS LAST, empreendimento, investidor
     `);
 
