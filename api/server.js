@@ -411,10 +411,10 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       receita_acumulada: parseFloat(r.receita_acumulada || 0)
     }));
 
-    const aReceberParsed = a_receber.map(r => ({
+    const aReceberParsed = (a_receber_detalhado || []).map(r => ({
       ano: r.ano,
-      mes: r.mes,
-      valor: parseFloat(r.valor || 0)
+      mes: r.mes_num,
+      valor: parseFloat(r.previsto || 0)
     }));
 
     // Nomes dos meses em pt-BR (TO_CHAR do Postgres retorna em inglês — mapeamos aqui)
