@@ -342,9 +342,8 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     `, params);
 
     // Contratos Assinados (da tabela raw.apl_valor_contrato)
-    // Regra de negócio: somente contratos com status VÁLIDO são considerados.
-    // Status MIGRADO/UNIDADE NO 675, MIGRADO P/ SERRINHA e DEVOLVIDO C/CORREÇÃO são excluídos
-    // pois representam contratos transferidos ou cancelados, não devendo compor o portfólio ativo.
+    // Regra de negócio: somente contratos com status VÁLIDO são considerados para o portfólio ativo.
+    // Status MIGRADO/UNIDADE NO 675, MIGRADO P/ SERRINHA e DEVOLVIDO C/CORREÇÃO são excluídos.
     const contratos_detalhado = await query(`
       SELECT
         id,
@@ -352,12 +351,31 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
         COALESCE(investidor, 'Investidor') AS investidor,
         data_assinatura_contrato,
         SUBSTRING(data_assinatura_contrato FROM 1 FOR 4)::INT AS ano,
+        EXTRACT(MONTH FROM TO_DATE(data_assinatura_contrato, 'YYYY-MM-DD'))::INT AS mes_num,
+        TO_CHAR(TO_DATE(data_assinatura_contrato, 'YYYY-MM-DD'), 'Month') AS mes_name_raw,
         valor_contrato::float AS valor_contrato
       FROM raw.apl_valor_contrato
       WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
         AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
         AND UPPER(TRIM(COALESCE(status, ''))) = 'VÁLIDO'
-      ORDER BY SUBSTRING(data_assinatura_contrato FROM 1 FOR 4) ASC NULLS LAST, empreendimento, investidor
+      ORDER BY ano ASC, mes_num ASC, empreendimento, investidor
+    `);
+
+    // KPI Total bruto — todos os status (para "Soma de Valor do Contrato" como no BI de referência)
+    const totalBrutoResult = await query(`
+      SELECT ROUND(SUM(valor_contrato::float)::numeric, 2) AS total
+      FROM raw.apl_valor_contrato
+      WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
+        AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
+    `);
+
+    // KPI Total válidos — apenas VÁLIDO (portfólio ativo)
+    const totalValidoResult = await query(`
+      SELECT ROUND(SUM(valor_contrato::float)::numeric, 2) AS total
+      FROM raw.apl_valor_contrato
+      WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
+        AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
+        AND UPPER(TRIM(COALESCE(status, ''))) = 'VÁLIDO'
     `);
 
     // Dropdowns desta tela
@@ -378,12 +396,17 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       valor: parseFloat(r.valor || 0)
     }));
 
+    // Nomes dos meses em pt-BR (TO_CHAR do Postgres retorna em inglês — mapeamos aqui)
+    const mesNomesPTBR = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
     const contratosParsed = (contratos_detalhado || []).map(r => ({
       id: r.id,
       empreendimento: r.empreendimento,
       investidor: r.investidor,
       data_assinatura: r.data_assinatura_contrato,
       ano: r.ano || 2024,
+      mes_num: r.mes_num || 1,
+      mes_name: mesNomesPTBR[r.mes_num || 1] || 'Janeiro',
       valor_contrato: parseFloat(r.valor_contrato || 0)
     }));
 
@@ -394,6 +417,8 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       kpis: {
         total_realizado: parseFloat(kpis[0]?.total_realizado || 0),
         total_a_realizar: parseFloat(kpis[0]?.total_a_realizar || 0),
+        valor_contrato_total: parseFloat(totalBrutoResult[0]?.total || 0),
+        valor_contrato_valido: parseFloat(totalValidoResult[0]?.total || 0),
       },
       dimensoes: {
         empreendimentos: emps.map(r => r.empreendimento),
