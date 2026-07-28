@@ -330,15 +330,20 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       FROM raw.fluxo_entrada WHERE ${where}
     `, params);
 
-    // Parcelas a receber futuras
-    const a_receber = await query(`
+    // Parcelas a receber detalhadas por Empreendimento e Investidor (da tabela raw.fluxo_entrada)
+    const a_receber_detalhado = await query(`
       SELECT
+        id,
+        COALESCE(empreendimento, 'Empreendimento') AS empreendimento,
+        COALESCE(investidor, 'Investidor') AS investidor,
+        data_pagamento,
         SUBSTRING(data_pagamento FROM 1 FOR 4)::INT AS ano,
-        SUBSTRING(data_pagamento FROM 6 FOR 2)::INT AS mes,
-        SUM(COALESCE(previsto, 0))                  AS valor
+        EXTRACT(MONTH FROM TO_DATE(data_pagamento, 'YYYY-MM-DD'))::INT AS mes_num,
+        COALESCE(previsto, 0)::float AS previsto
       FROM raw.fluxo_entrada
-      WHERE ${where} AND COALESCE(previsto, 0) > 0 AND data_pagamento ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
-      GROUP BY 1, 2 ORDER BY 1, 2
+      WHERE ${where} AND COALESCE(previsto, 0)::float > 0
+        AND data_pagamento ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+      ORDER BY ano ASC, mes_num ASC, empreendimento, investidor
     `, params);
 
     // Contratos Assinados (da tabela raw.apl_valor_contrato)
@@ -415,6 +420,17 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     // Nomes dos meses em pt-BR (TO_CHAR do Postgres retorna em inglês — mapeamos aqui)
     const mesNomesPTBR = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
+    const aReceberDetalhadoParsed = (a_receber_detalhado || []).map(r => ({
+      id: r.id,
+      empreendimento: r.empreendimento,
+      investidor: r.investidor,
+      data_pagamento: r.data_pagamento,
+      ano: r.ano,
+      mes_num: r.mes_num || 1,
+      mes_name: mesNomesPTBR[r.mes_num || 1] || 'Janeiro',
+      previsto: parseFloat(r.previsto || 0)
+    }));
+
     const receitaDetalhadaParsed = (receita_detalhada || []).map(r => ({
       id: r.id,
       empreendimento: r.empreendimento,
@@ -441,6 +457,7 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       mensal: mensalParsed,
       receita_detalhada: receitaDetalhadaParsed,
       a_receber: aReceberParsed,
+      a_receber_detalhado: aReceberDetalhadoParsed,
       contratos_assinados: contratosParsed,
       kpis: {
         total_realizado: parseFloat(kpis[0]?.total_realizado || 0),
