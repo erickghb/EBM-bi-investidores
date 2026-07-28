@@ -347,8 +347,8 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     `, params);
 
     // Contratos Assinados (da tabela raw.apl_valor_contrato)
-    // Regra de negócio: somente contratos com status VÁLIDO são considerados para o portfólio ativo.
-    // Status MIGRADO/UNIDADE NO 675, MIGRADO P/ SERRINHA e DEVOLVIDO C/CORREÇÃO são excluídos.
+    // Regra de negócio: contratos ativos com crédito do investidor (status VÁLIDO e MIGRADO).
+    // Apenas contratos devolvidos (DEVOLVIDO C/CORREÇÃO) são excluídos.
     const contratos_detalhado = await query(`
       SELECT
         id,
@@ -362,7 +362,7 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       FROM raw.apl_valor_contrato
       WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
         AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
-        AND UPPER(TRIM(COALESCE(status, ''))) = 'VÁLIDO'
+        AND UPPER(TRIM(COALESCE(status, ''))) NOT ILIKE '%DEVOLVIDO%'
       ORDER BY ano ASC, mes_num ASC, empreendimento, investidor
     `);
 
@@ -374,13 +374,13 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
         AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
     `);
 
-    // KPI Total válidos — apenas VÁLIDO (portfólio ativo)
+    // KPI Total válidos + migrados (crédito ativo do investidor)
     const totalValidoResult = await query(`
       SELECT ROUND(SUM(valor_contrato::float)::numeric, 2) AS total
       FROM raw.apl_valor_contrato
       WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
         AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
-        AND UPPER(TRIM(COALESCE(status, ''))) = 'VÁLIDO'
+        AND UPPER(TRIM(COALESCE(status, ''))) NOT ILIKE '%DEVOLVIDO%'
     `);
 
     // Receita detalhada por Empreendimento e Investidor (da tabela raw.fluxo_entrada)
