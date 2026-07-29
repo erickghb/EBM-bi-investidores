@@ -95,7 +95,8 @@ app.get('/api/controle', async (req, res) => {
     if (tipo_investimento) { params.push(tipo_investimento); conditions.push(`tipo_investimento = $${params.length}`); }
     if (intermediador)     { params.push(intermediador);     conditions.push(`intermediador = $${params.length}`); }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const defaultWhere = "WHERE (tipo_investimento IS NULL OR UPPER(tipo_investimento) NOT LIKE '%ACERTO%') AND (status IS NULL OR UPPER(status) NOT LIKE '%ACERTO%')";
+    const where = conditions.length ? `${defaultWhere} AND ${conditions.join(' AND ')}` : defaultWhere;
 
     const records = await query(`
       SELECT
@@ -197,6 +198,7 @@ app.get('/api/grafico/investido-por-ano', async (req, res) => {
       WHERE data_assinatura IS NOT NULL
         AND data_assinatura ~ '[0-9]{4}'
         AND COALESCE(ativo_inativo, '') <> 'Inativo'
+        AND (tipo_scp IS NULL OR UPPER(tipo_scp) NOT LIKE '%ACERTO%')
       GROUP BY ano
       ORDER BY ano
     `);
