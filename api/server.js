@@ -490,6 +490,8 @@ app.get('/api/kpis/2026', async (req, res) => {
       FROM raw.gestao_investidores
       WHERE data_assinatura ILIKE '%2026%'
         AND COALESCE(ativo_inativo, '') <> 'Inativo'
+        AND (tipo_scp IS NULL OR UPPER(tipo_scp) NOT LIKE '%ACERTO%')
+        AND (observacoes IS NULL OR UPPER(observacoes) NOT LIKE '%ACERTO%')
     `);
     const investido_2026 = parseFloat(rows[0]?.investido_2026 || 0);
     const meta_2026      = 20_000_000; // Meta definida pela EBM
