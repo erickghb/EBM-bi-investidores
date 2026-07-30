@@ -220,10 +220,11 @@ app.get('/api/grafico/investido-por-ano', async (req, res) => {
 });
 
 // ── Gráfico 2: Acompanhamento de Empreendimentos ─────────────────
-// Regras de negócio:
+// Regras de negócio estritas:
 //   1. Distratados excluídos (UPPER(status) NOT LIKE '%DISTRAT%')
-//   2. Previsão de Lançamento = Landbank data_lancamento (com fallback para gi.data_lancamento)
-//   3. Previsão de Conclusão = Lançamento + tempo_obras_meses
+//   2. Data de lançamento com tolerância = gi.data_lancamento_tolerancia (Gestão de Investidores)
+//   3. Previsão de Lançamento = lb.data_lancamento (estritamente do Landbank)
+//   4. Previsão de Conclusão = lb.data_lancamento + lb.tempo_obras_meses (Landbank)
 //      Fórmula DAX equivalente: EOMONTH(DataOriginal, Meses-1) + DAY(DataOriginal)
 app.get('/api/grafico/acompanhamento', async (req, res) => {
   try {
@@ -237,18 +238,11 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
           ELSE gi.data_lancamento_tolerancia
         END                                       AS data_lancamento_tolerancia,
 
-        COALESCE(
-          CASE
-            WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento
-            WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(lb.data_lancamento, 'DD/MM/YYYY'), 'YYYY-MM-DD')
-            ELSE NULL
-          END,
-          CASE
-            WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento
-            WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(gi.data_lancamento, 'DD/MM/YYYY'), 'YYYY-MM-DD')
-            ELSE NULL
-          END
-        )                                         AS data_previsao_lancamento,
+        CASE
+          WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento
+          WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(lb.data_lancamento, 'DD/MM/YYYY'), 'YYYY-MM-DD')
+          ELSE NULL
+        END                                       AS data_previsao_lancamento,
 
         gi.penalidade_lancamento,
 
@@ -259,7 +253,6 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         END                                       AS data_conclusao_tolerancia,
 
         CASE
-          -- A. Landbank lanc + Landbank tempo_obras_meses
           WHEN (
             CASE
               WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento::date
@@ -281,31 +274,6 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
             )::date,
             'YYYY-MM-DD'
           )
-          -- B. gestao lanc + Landbank tempo_obras_meses
-          WHEN (
-            CASE
-              WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento::date
-              WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(gi.data_lancamento, 'DD/MM/YYYY')
-              ELSE NULL
-            END
-          ) IS NOT NULL
-          AND lb.tempo_obras_meses IS NOT NULL
-          AND lb.tempo_obras_meses ~ '^[0-9]+(\\.[0-9]+)?$'
-          THEN TO_CHAR(
-            (
-              (
-                CASE
-                  WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento::date
-                  WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(gi.data_lancamento, 'DD/MM/YYYY')
-                  ELSE NULL
-                END
-              ) + (ROUND(lb.tempo_obras_meses::numeric)::int || ' months')::interval
-            )::date,
-            'YYYY-MM-DD'
-          )
-          -- C. Fallback: gi.data_conclusao
-          WHEN gi.data_conclusao ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_conclusao
-          WHEN gi.data_conclusao ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(gi.data_conclusao, 'DD/MM/YYYY'), 'YYYY-MM-DD')
           ELSE NULL
         END                                       AS data_previsao_conclusao,
 
@@ -351,21 +319,13 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         };
       }
 
-      // Se o empreendimento pai ainda não tinha a data de lançamento/conclusão e este registro encontrou:
-      if ((!empMap[emp].data_previsao_lancamento || empMap[emp].data_previsao_lancamento === '-') && r.data_previsao_lancamento) {
-        empMap[emp].data_previsao_lancamento = r.data_previsao_lancamento;
-      }
-      if ((!empMap[emp].data_previsao_conclusao || empMap[emp].data_previsao_conclusao === '-') && r.data_previsao_conclusao) {
-        empMap[emp].data_previsao_conclusao = r.data_previsao_conclusao;
-      }
-
       empMap[emp].investidores.push({
         nome_investidor:              r.nome_investidor             || 'Investidor',
         data_lancamento_tolerancia:   r.data_lancamento_tolerancia  || '-',
-        data_previsao_lancamento:     r.data_previsao_lancamento || empMap[emp].data_previsao_lancamento || '-',
+        data_previsao_lancamento:     empMap[emp].data_previsao_lancamento,
         penalidade_lancamento:        r.penalidade_lancamento       || '-',
         data_conclusao_tolerancia:    r.data_conclusao_tolerancia   || '-',
-        data_previsao_conclusao:      r.data_previsao_conclusao || empMap[emp].data_previsao_conclusao || '-',
+        data_previsao_conclusao:      empMap[emp].data_previsao_conclusao,
         penalidade_conclusao:         r.penalidade_conclusao        || '-',
         plano_de_acao:                r.plano_de_acao               || '-',
         intermediador:                r.intermediador               || '-'
