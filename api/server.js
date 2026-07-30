@@ -95,7 +95,11 @@ app.get('/api/controle', async (req, res) => {
     if (tipo_investimento) { params.push(tipo_investimento); conditions.push(`tipo_investimento = $${params.length}`); }
     if (intermediador)     { params.push(intermediador);     conditions.push(`intermediador = $${params.length}`); }
 
-    const defaultWhere = "WHERE (tipo_investimento IS NULL OR UPPER(tipo_investimento) NOT LIKE '%ACERTO%') AND (status IS NULL OR UPPER(status) NOT LIKE '%ACERTO%')";
+    const defaultWhere = `WHERE
+      (tipo_investimento IS NULL OR UPPER(tipo_investimento) NOT LIKE '%ACERTO%')
+      AND (status IS NULL OR UPPER(status) NOT LIKE '%ACERTO%')
+      AND (status_acerto IS NULL OR UPPER(status_acerto) NOT LIKE '%ACERTO%')
+      AND UPPER(COALESCE(status, '')) NOT LIKE '%DISTRAT%'`;
     const where = conditions.length ? `${defaultWhere} AND ${conditions.join(' AND ')}` : defaultWhere;
 
     const records = await query(`
@@ -199,6 +203,7 @@ app.get('/api/grafico/investido-por-ano', async (req, res) => {
         AND data_assinatura ~ '[0-9]{4}'
         AND COALESCE(ativo_inativo, '') <> 'Inativo'
         AND (tipo_scp IS NULL OR UPPER(tipo_scp) NOT LIKE '%ACERTO%')
+        AND UPPER(COALESCE(status, '')) NOT LIKE '%DISTRAT%'
       GROUP BY ano
       ORDER BY ano
     `);
@@ -215,24 +220,42 @@ app.get('/api/grafico/investido-por-ano', async (req, res) => {
 });
 
 // ── Gráfico 2: Acompanhamento de Empreendimentos ─────────────────
+// Regras de negócio:
+//   1. Distratados excluídos (UPPER(status) NOT LIKE '%DISTRAT%')
+//   2. Previsão de Lançamento = lb.data_lancamento (sempre do Landbank)
+//   3. Previsão de Conclusão = lb.data_lancamento + tempo_obras_meses
+//      Fórmula DAX equivalente: EOMONTH(DataOriginal, Meses-1) + DAY(DataOriginal)
+//      SQL: data_lancamento::date + (tempo_obras_meses::int || ' months')::interval
 app.get('/api/grafico/acompanhamento', async (req, res) => {
   try {
     const rows = await query(`
       SELECT
-        lb.nome AS nome_empreendimento,
+        lb.nome                                   AS nome_empreendimento,
         gi.nome_investidor,
         gi.data_lancamento_tolerancia,
-        COALESCE(gi.data_lancamento, lb.data_lancamento) AS data_previsao_lancamento,
+        lb.data_lancamento                        AS data_previsao_lancamento,
         gi.penalidade_lancamento,
         gi.data_conclusao_tolerancia,
-        gi.data_conclusao AS data_previsao_conclusao,
+        CASE
+          WHEN lb.data_lancamento IS NOT NULL
+            AND lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}'
+            AND lb.tempo_obras_meses IS NOT NULL
+            AND lb.tempo_obras_meses ~ '^[0-9]+(\\.[0-9]+)?$'
+          THEN TO_CHAR(
+            (lb.data_lancamento::date + (lb.tempo_obras_meses::int || ' months')::interval)::date,
+            'YYYY-MM-DD'
+          )
+          ELSE NULL
+        END                                       AS data_previsao_conclusao,
         gi.penalidade_conclusao,
         gi.plano_de_acao,
-        gi.nome_intermediador AS intermediador
+        gi.nome_intermediador                     AS intermediador
       FROM raw.gestao_investidores gi
       JOIN raw.landbank lb
         ON gi.obra_id::text = lb.titulo::text OR gi.centro_custo::text = lb.titulo::text
       WHERE COALESCE(gi.ativo_inativo, '') <> 'Inativo'
+        AND UPPER(COALESCE(gi.status, '')) NOT LIKE '%DISTRAT%'
+        AND (gi.tipo_scp IS NULL OR UPPER(gi.tipo_scp) NOT LIKE '%ACERTO%')
         AND (
           lb.nome ILIKE '%Palmeiras%'
           OR lb.nome ILIKE '%Mansões%'
@@ -252,29 +275,31 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
     (rows || []).forEach(r => {
       const emp = r.nome_empreendimento || 'Outros';
       if (!empMap[emp]) {
+        // Nível Empreendimento: previsões sempre do Landbank (mesmas para todos os investidores)
         empMap[emp] = {
           nome_empreendimento: emp,
-          data_previsao_lancamento: r.data_previsao_lancamento || '-',
-          data_conclusao_tolerancia: r.data_conclusao_tolerancia || '-',
+          data_previsao_lancamento:  r.data_previsao_lancamento  || '-',
+          data_previsao_conclusao:   r.data_previsao_conclusao   || '-',
           data_lancamento_tolerancia: r.data_lancamento_tolerancia || '-',
+          data_conclusao_tolerancia:  r.data_conclusao_tolerancia  || '-',
           penalidade_lancamento: r.penalidade_lancamento || '-',
-          penalidade_conclusao: r.penalidade_conclusao || '-',
-          data_previsao_conclusao: r.data_previsao_conclusao || '-',
+          penalidade_conclusao:  r.penalidade_conclusao  || '-',
           plano_de_acao: r.plano_de_acao || '-',
           intermediador: r.intermediador || '-',
           investidores: []
         };
       }
+      // Nível Investidor: previsão de lançamento e conclusão IGUAIS às do empreendimento (do Landbank)
       empMap[emp].investidores.push({
-        nome_investidor: r.nome_investidor || 'Investidor',
-        data_lancamento_tolerancia: r.data_lancamento_tolerancia || '-',
-        data_previsao_lancamento: r.data_previsao_lancamento || '-',
-        penalidade_lancamento: r.penalidade_lancamento || '-',
-        data_conclusao_tolerancia: r.data_conclusao_tolerancia || '-',
-        data_previsao_conclusao: r.data_previsao_conclusao || '-',
-        penalidade_conclusao: r.penalidade_conclusao || '-',
-        plano_de_acao: r.plano_de_acao || '-',
-        intermediador: r.intermediador || '-'
+        nome_investidor:              r.nome_investidor             || 'Investidor',
+        data_lancamento_tolerancia:   r.data_lancamento_tolerancia  || '-',
+        data_previsao_lancamento:     empMap[emp].data_previsao_lancamento,  // sempre do Landbank
+        penalidade_lancamento:        r.penalidade_lancamento       || '-',
+        data_conclusao_tolerancia:    r.data_conclusao_tolerancia   || '-',
+        data_previsao_conclusao:      empMap[emp].data_previsao_conclusao,   // sempre do Landbank + meses
+        penalidade_conclusao:         r.penalidade_conclusao        || '-',
+        plano_de_acao:                r.plano_de_acao               || '-',
+        intermediador:                r.intermediador               || '-'
       });
     });
 
@@ -492,6 +517,7 @@ app.get('/api/kpis/2026', async (req, res) => {
         AND COALESCE(ativo_inativo, '') <> 'Inativo'
         AND (tipo_scp IS NULL OR UPPER(tipo_scp) NOT LIKE '%ACERTO%')
         AND (observacoes IS NULL OR UPPER(observacoes) NOT LIKE '%ACERTO%')
+        AND UPPER(COALESCE(status, '')) NOT LIKE '%DISTRAT%'
     `);
     const investido_2026 = parseFloat(rows[0]?.investido_2026 || 0);
     const meta_2026      = 20_000_000; // Meta definida pela EBM
