@@ -222,31 +222,93 @@ app.get('/api/grafico/investido-por-ano', async (req, res) => {
 // ── Gráfico 2: Acompanhamento de Empreendimentos ─────────────────
 // Regras de negócio:
 //   1. Distratados excluídos (UPPER(status) NOT LIKE '%DISTRAT%')
-//   2. Previsão de Lançamento = lb.data_lancamento (sempre do Landbank)
-//   3. Previsão de Conclusão = lb.data_lancamento + tempo_obras_meses
+//   2. Previsão de Lançamento = Landbank data_lancamento (com fallback para gi.data_lancamento)
+//   3. Previsão de Conclusão = Lançamento + tempo_obras_meses
 //      Fórmula DAX equivalente: EOMONTH(DataOriginal, Meses-1) + DAY(DataOriginal)
-//      SQL: data_lancamento::date + (tempo_obras_meses::int || ' months')::interval
 app.get('/api/grafico/acompanhamento', async (req, res) => {
   try {
     const rows = await query(`
       SELECT
         lb.nome                                   AS nome_empreendimento,
         gi.nome_investidor,
-        gi.data_lancamento_tolerancia,
-        lb.data_lancamento                        AS data_previsao_lancamento,
-        gi.penalidade_lancamento,
-        gi.data_conclusao_tolerancia,
         CASE
-          WHEN lb.data_lancamento IS NOT NULL
-            AND lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}'
-            AND lb.tempo_obras_meses IS NOT NULL
-            AND lb.tempo_obras_meses ~ '^[0-9]+(\\.[0-9]+)?$'
+          WHEN gi.data_lancamento_tolerancia ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento_tolerancia
+          WHEN gi.data_lancamento_tolerancia ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(gi.data_lancamento_tolerancia, 'DD/MM/YYYY'), 'YYYY-MM-DD')
+          ELSE gi.data_lancamento_tolerancia
+        END                                       AS data_lancamento_tolerancia,
+
+        COALESCE(
+          CASE
+            WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento
+            WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(lb.data_lancamento, 'DD/MM/YYYY'), 'YYYY-MM-DD')
+            ELSE NULL
+          END,
+          CASE
+            WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento
+            WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(gi.data_lancamento, 'DD/MM/YYYY'), 'YYYY-MM-DD')
+            ELSE NULL
+          END
+        )                                         AS data_previsao_lancamento,
+
+        gi.penalidade_lancamento,
+
+        CASE
+          WHEN gi.data_conclusao_tolerancia ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_conclusao_tolerancia
+          WHEN gi.data_conclusao_tolerancia ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(gi.data_conclusao_tolerancia, 'DD/MM/YYYY'), 'YYYY-MM-DD')
+          ELSE gi.data_conclusao_tolerancia
+        END                                       AS data_conclusao_tolerancia,
+
+        CASE
+          -- A. Landbank lanc + Landbank tempo_obras_meses
+          WHEN (
+            CASE
+              WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento::date
+              WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(lb.data_lancamento, 'DD/MM/YYYY')
+              ELSE NULL
+            END
+          ) IS NOT NULL
+          AND lb.tempo_obras_meses IS NOT NULL
+          AND lb.tempo_obras_meses ~ '^[0-9]+(\\.[0-9]+)?$'
           THEN TO_CHAR(
-            (lb.data_lancamento::date + (lb.tempo_obras_meses::int || ' months')::interval)::date,
+            (
+              (
+                CASE
+                  WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento::date
+                  WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(lb.data_lancamento, 'DD/MM/YYYY')
+                  ELSE NULL
+                END
+              ) + (ROUND(lb.tempo_obras_meses::numeric)::int || ' months')::interval
+            )::date,
             'YYYY-MM-DD'
           )
+          -- B. gestao lanc + Landbank tempo_obras_meses
+          WHEN (
+            CASE
+              WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento::date
+              WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(gi.data_lancamento, 'DD/MM/YYYY')
+              ELSE NULL
+            END
+          ) IS NOT NULL
+          AND lb.tempo_obras_meses IS NOT NULL
+          AND lb.tempo_obras_meses ~ '^[0-9]+(\\.[0-9]+)?$'
+          THEN TO_CHAR(
+            (
+              (
+                CASE
+                  WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento::date
+                  WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(gi.data_lancamento, 'DD/MM/YYYY')
+                  ELSE NULL
+                END
+              ) + (ROUND(lb.tempo_obras_meses::numeric)::int || ' months')::interval
+            )::date,
+            'YYYY-MM-DD'
+          )
+          -- C. Fallback: gi.data_conclusao
+          WHEN gi.data_conclusao ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_conclusao
+          WHEN gi.data_conclusao ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(gi.data_conclusao, 'DD/MM/YYYY'), 'YYYY-MM-DD')
           ELSE NULL
         END                                       AS data_previsao_conclusao,
+
         gi.penalidade_conclusao,
         gi.plano_de_acao,
         gi.nome_intermediador                     AS intermediador
@@ -275,7 +337,6 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
     (rows || []).forEach(r => {
       const emp = r.nome_empreendimento || 'Outros';
       if (!empMap[emp]) {
-        // Nível Empreendimento: previsões sempre do Landbank (mesmas para todos os investidores)
         empMap[emp] = {
           nome_empreendimento: emp,
           data_previsao_lancamento:  r.data_previsao_lancamento  || '-',
@@ -289,14 +350,22 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
           investidores: []
         };
       }
-      // Nível Investidor: previsão de lançamento e conclusão IGUAIS às do empreendimento (do Landbank)
+
+      // Se o empreendimento pai ainda não tinha a data de lançamento/conclusão e este registro encontrou:
+      if ((!empMap[emp].data_previsao_lancamento || empMap[emp].data_previsao_lancamento === '-') && r.data_previsao_lancamento) {
+        empMap[emp].data_previsao_lancamento = r.data_previsao_lancamento;
+      }
+      if ((!empMap[emp].data_previsao_conclusao || empMap[emp].data_previsao_conclusao === '-') && r.data_previsao_conclusao) {
+        empMap[emp].data_previsao_conclusao = r.data_previsao_conclusao;
+      }
+
       empMap[emp].investidores.push({
         nome_investidor:              r.nome_investidor             || 'Investidor',
         data_lancamento_tolerancia:   r.data_lancamento_tolerancia  || '-',
-        data_previsao_lancamento:     empMap[emp].data_previsao_lancamento,  // sempre do Landbank
+        data_previsao_lancamento:     r.data_previsao_lancamento || empMap[emp].data_previsao_lancamento || '-',
         penalidade_lancamento:        r.penalidade_lancamento       || '-',
         data_conclusao_tolerancia:    r.data_conclusao_tolerancia   || '-',
-        data_previsao_conclusao:      empMap[emp].data_previsao_conclusao,   // sempre do Landbank + meses
+        data_previsao_conclusao:      r.data_previsao_conclusao || empMap[emp].data_previsao_conclusao || '-',
         penalidade_conclusao:         r.penalidade_conclusao        || '-',
         plano_de_acao:                r.plano_de_acao               || '-',
         intermediador:                r.intermediador               || '-'
