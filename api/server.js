@@ -48,6 +48,26 @@ app.get('/api/status', async (req, res) => {
   res.json({ status: 'ok', database: 'neon', runtime: 'node' });
 });
 
+app.get('/api/debug/landbank', async (req, res) => {
+  try {
+    const lbRows = await query(`
+      SELECT id, titulo, nome, data_lancamento, tempo_obras_meses, data_assinatura_contrato
+      FROM raw.landbank
+      WHERE nome ILIKE '%Palmeiras%' OR nome ILIKE '%Mansões%' OR nome ILIKE '%Marista%' OR nome ILIKE '%Alpes%' OR nome ILIKE '%Gran%'
+      LIMIT 20
+    `);
+    const giRows = await query(`
+      SELECT obra_id, centro_custo, nome_investidor, data_lancamento, data_conclusao, data_lancamento_tolerancia, data_conclusao_tolerancia
+      FROM raw.gestao_investidores
+      WHERE (data_lancamento IS NOT NULL AND data_lancamento <> '') OR (data_lancamento_tolerancia IS NOT NULL AND data_lancamento_tolerancia <> '')
+      LIMIT 20
+    `);
+    res.json({ landbank: lbRows, gestao: giRows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Dimensões (dropdowns) ────────────────────────────────────────
 app.get('/api/dimensoes', async (req, res) => {
   try {
