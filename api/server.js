@@ -124,16 +124,6 @@ app.get('/api/status', async (req, res) => {
   res.json({ status: 'ok', database: 'neon', runtime: 'node' });
 });
 
-app.get('/api/debug/landbank', async (req, res) => {
-  try {
-    const cols = await query("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'landbank'");
-    const sample = await query("SELECT * FROM raw.landbank LIMIT 5");
-    res.json({ columns: cols, sample });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.get('/api/admin/reload-fluxo', async (req, res) => {
   const result = await syncFreshFluxoData(true);
   res.json(result);
@@ -329,12 +319,19 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
           ELSE gi.data_lancamento_tolerancia
         END                                       AS data_lancamento_tolerancia,
 
-        CASE
-          WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento
-          WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(lb.data_lancamento, 'DD/MM/YYYY'), 'YYYY-MM-DD')
-          WHEN lb.data_lancamento IS NOT NULL AND lb.data_lancamento <> '' THEN lb.data_lancamento
-          ELSE NULL
-        END                                       AS data_previsao_lancamento,
+        COALESCE(
+          CASE
+            WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento
+            WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(lb.data_lancamento, 'DD/MM/YYYY'), 'YYYY-MM-DD')
+            ELSE NULL
+          END,
+          CASE
+            WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento
+            WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(gi.data_lancamento, 'DD/MM/YYYY'), 'YYYY-MM-DD')
+            WHEN gi.data_lancamento IS NOT NULL AND gi.data_lancamento <> '' THEN gi.data_lancamento
+            ELSE NULL
+          END
+        )                                         AS data_previsao_lancamento,
 
         gi.penalidade_lancamento,
 
@@ -345,19 +342,39 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         END                                       AS data_conclusao_tolerancia,
 
         CASE
-          WHEN lb.data_lancamento IS NOT NULL
-            AND (lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' OR lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}')
-            AND lb.tempo_obras_meses IS NOT NULL
-            AND lb.tempo_obras_meses ~ '^[0-9]+(\\.[0-9]+)?$'
+          WHEN COALESCE(
+            CASE
+              WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento::date
+              WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(lb.data_lancamento, 'DD/MM/YYYY')
+              ELSE NULL
+            END,
+            CASE
+              WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento::date
+              WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(gi.data_lancamento, 'DD/MM/YYYY')
+              ELSE NULL
+            END
+          ) IS NOT NULL
+          AND lb.tempo_obras_meses IS NOT NULL
+          AND lb.tempo_obras_meses ~ '^[0-9]+(\\.[0-9]+)?$'
           THEN TO_CHAR(
             (
-              CASE
-                WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento::date
-                WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(lb.data_lancamento, 'DD/MM/YYYY')
-              END + (ROUND(lb.tempo_obras_meses::numeric)::int || ' months')::interval
+              COALESCE(
+                CASE
+                  WHEN lb.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN lb.data_lancamento::date
+                  WHEN lb.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(lb.data_lancamento, 'DD/MM/YYYY')
+                  ELSE NULL
+                END,
+                CASE
+                  WHEN gi.data_lancamento ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_lancamento::date
+                  WHEN gi.data_lancamento ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_DATE(gi.data_lancamento, 'DD/MM/YYYY')
+                  ELSE NULL
+                END
+              ) + (ROUND(lb.tempo_obras_meses::numeric)::int || ' months')::interval
             )::date,
             'YYYY-MM-DD'
           )
+          WHEN gi.data_conclusao ~ '^\\d{4}-\\d{2}-\\d{2}' THEN gi.data_conclusao
+          WHEN gi.data_conclusao ~ '^\\d{2}/\\d{2}/\\d{4}' THEN TO_CHAR(TO_DATE(gi.data_conclusao, 'DD/MM/YYYY'), 'YYYY-MM-DD')
           ELSE NULL
         END                                       AS data_previsao_conclusao,
 
@@ -410,8 +427,6 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         empMap[emp].data_previsao_conclusao = r.data_previsao_conclusao;
       }
 
-      // Regra estrita: Previsão de Lançamento e Conclusão são propriedades uniformes do Empreendimento (Landbank)
-      // aplicadas a TODOS os investidores daquele empreendimento.
       empMap[emp].investidores.push({
         nome_investidor:              r.nome_investidor             || 'Investidor',
         data_lancamento_tolerancia:   r.data_lancamento_tolerancia  || '-',
