@@ -440,6 +440,16 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
       });
     });
 
+    // Segunda passagem estrita: Garante 100% de uniformidade das datas de Lançamento e Conclusão do Empreendimento em todos os investidores
+    Object.values(empMap).forEach(e => {
+      const empLanc = e.data_previsao_lancamento || '-';
+      const empConc = e.data_previsao_conclusao || '-';
+      e.investidores.forEach(inv => {
+        inv.data_previsao_lancamento = empLanc;
+        inv.data_previsao_conclusao = empConc;
+      });
+    });
+
     const empreendimentos = Object.values(empMap).map(e => ({
       ...e,
       qtd_investidores: e.investidores.length
