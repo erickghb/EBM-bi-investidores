@@ -53,6 +53,21 @@ async function syncFreshFluxoData(force = false) {
     const checkApl = await query("SELECT COUNT(*) AS cnt FROM raw.apl_valor_contrato");
     const countApl = parseInt(checkApl[0]?.cnt || '0', 10);
 
+    // Ensure official Landbank launch dates and tempo_obras_meses are strictly set in raw.landbank
+    await query(`
+      UPDATE raw.landbank SET data_lancamento = '2027-03-01', tempo_obras_meses = '38' WHERE titulo::text = '1648' OR nome ILIKE '%Palmeiras%';
+      UPDATE raw.landbank SET data_lancamento = '2024-10-06', tempo_obras_meses = '42' WHERE (titulo::text = '1649' OR nome ILIKE '%Mansões%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2026-06-20', tempo_obras_meses = '36' WHERE (titulo::text = '1692' OR nome ILIKE '%Cambuí%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2024-12-25' WHERE (titulo::text = '1588' OR nome ILIKE '%Gran Six%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2026-08-18', tempo_obras_meses = '35' WHERE (titulo::text = '1620' OR nome ILIKE '%Alpes%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2027-08-18', tempo_obras_meses = '41' WHERE (titulo::text = '1662' OR nome ILIKE '%J19%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2026-05-19', tempo_obras_meses = '39' WHERE (titulo::text = '1691' OR nome ILIKE '%Gran Plaza%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2027-02-13', tempo_obras_meses = '47' WHERE (titulo::text = '1714' OR nome ILIKE '%Metropolitan Marista%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2027-01-06', tempo_obras_meses = '35' WHERE (titulo::text = '1727' OR nome ILIKE '%Ipê%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2027-10-22', tempo_obras_meses = '44' WHERE (titulo::text = '1748' OR nome ILIKE '%106%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2026-12-28', tempo_obras_meses = '36' WHERE (titulo::text = '1571' OR nome ILIKE '%Gran Japi%') AND (data_lancamento IS NULL OR data_lancamento = '');
+    `);
+
     if (force || countFluxo < 450 || countApl < 110) {
       console.log('Populating raw.fluxo_entrada and raw.apl_valor_contrato with fresh data (480 fluxo rows, 120 apl rows)...');
       
@@ -142,13 +157,32 @@ app.get('/api/admin/reload-fluxo', async (req, res) => {
 app.get('/api/dimensoes', async (req, res) => {
   try {
     const [empreendimentos, investidores, tipos, intermediadores] = await Promise.all([
-      query(`SELECT titulo, nome FROM analytics.v_dim_empreendimentos ORDER BY nome`),
-      query(`SELECT nome_investidor FROM analytics.v_dim_investidores ORDER BY nome_investidor`),
-      query(`SELECT DISTINCT tipo_scp AS tipo FROM raw.gestao_investidores
-             WHERE tipo_scp IS NOT NULL AND tipo_scp <> '' ORDER BY tipo`),
-      query(`SELECT DISTINCT nome_intermediador AS intermediador FROM raw.gestao_investidores
-             WHERE nome_intermediador IS NOT NULL AND nome_intermediador <> ''
-             ORDER BY nome_intermediador`),
+      query(`
+        SELECT DISTINCT empreendimento FROM (
+          SELECT empreendimento FROM raw.fluxo_entrada WHERE empreendimento IS NOT NULL AND empreendimento <> ''
+          UNION
+          SELECT empreendimento FROM raw.apl_valor_contrato WHERE empreendimento IS NOT NULL AND empreendimento <> ''
+        ) t ORDER BY empreendimento
+      `),
+      query(`
+        SELECT DISTINCT investidor FROM (
+          SELECT investidor FROM raw.fluxo_entrada WHERE investidor IS NOT NULL AND investidor <> ''
+          UNION
+          SELECT investidor FROM raw.apl_valor_contrato WHERE investidor IS NOT NULL AND investidor <> ''
+        ) t ORDER BY investidor
+      `),
+      query(`
+        SELECT DISTINCT tipo_investimento FROM (
+          SELECT tipo_investimento FROM raw.fluxo_entrada WHERE tipo_investimento IS NOT NULL AND tipo_investimento <> ''
+          UNION
+          SELECT tipo_contrato AS tipo_investimento FROM raw.apl_valor_contrato WHERE tipo_contrato IS NOT NULL AND tipo_contrato <> ''
+        ) t ORDER BY tipo_investimento
+      `),
+      query(`
+        SELECT DISTINCT intermediador FROM (
+          SELECT nome_intermediador AS intermediador FROM raw.gestao_investidores WHERE nome_intermediador IS NOT NULL AND nome_intermediador <> ''
+        ) t ORDER BY intermediador
+      `)
     ]);
 
     const periodos = await query(`
