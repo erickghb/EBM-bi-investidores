@@ -454,14 +454,13 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
 });
 
 // ── Tela Acompanhamento $ ─────────────────────────────────────────
-// Receita acumulada equivalente ao DAX:
-// CALCULATE(SUM(Realizado), FILTER(ALL(Fluxo), Data <= MAX(Data)))
+// Regra de negócio: Acompanhamento $ considera TODOS os valores de entrada que já entraram ao longo do tempo.
+// Inclui valores VÁLIDOS, MIGRADOS e DEVOLVIDOS/DISTRATADOS nos indicadores e tabelas por período.
 app.get('/api/acompanhamento/receita', async (req, res) => {
   try {
     const { empreendimento, investidor } = req.query;
     const baseConditions = [
-      "data_pagamento IS NOT NULL",
-      "status NOT IN ('DEVOLVIDO C/CORRECAO', 'DEVOLVIDO C/CORREÇÃO')"
+      "data_pagamento IS NOT NULL"
     ];
     const params = [];
 
@@ -512,8 +511,7 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
     `, params);
 
     // Contratos Assinados (da tabela raw.apl_valor_contrato)
-    // Regra de negócio: contratos ativos com crédito do investidor (status VÁLIDO e MIGRADO).
-    // Apenas contratos devolvidos (DEVOLVIDO C/CORREÇÃO) são excluídos.
+    // Inclui todos os contratos (VÁLIDO, MIGRADO e DEVOLVIDO) conforme regra da tela Acompanhamento $
     const contratos_detalhado = await query(`
       SELECT
         id,
@@ -528,11 +526,10 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       FROM raw.apl_valor_contrato
       WHERE valor_contrato IS NOT NULL AND valor_contrato::float > 0
         AND data_assinatura_contrato ~ '^(19|20)[0-9]{2}'
-        AND UPPER(TRIM(COALESCE(status, ''))) NOT ILIKE '%DEVOLVIDO%'
       ORDER BY ano ASC, mes_num ASC, empreendimento, investidor
     `);
 
-    // KPI Total bruto — todos os status (para "Soma de Valor do Contrato" como no BI de referência)
+    // KPI Total de contratos (todos os status)
     const totalBrutoResult = await query(`
       SELECT ROUND(SUM(valor_contrato::float)::numeric, 2) AS total
       FROM raw.apl_valor_contrato
