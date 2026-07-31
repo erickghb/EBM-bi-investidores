@@ -124,6 +124,16 @@ app.get('/api/status', async (req, res) => {
   res.json({ status: 'ok', database: 'neon', runtime: 'node' });
 });
 
+app.get('/api/debug/landbank', async (req, res) => {
+  try {
+    const cols = await query("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'landbank'");
+    const sample = await query("SELECT * FROM raw.landbank LIMIT 5");
+    res.json({ columns: cols, sample });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/admin/reload-fluxo', async (req, res) => {
   const result = await syncFreshFluxoData(true);
   res.json(result);
