@@ -43,9 +43,66 @@ async function query(sql, params = []) {
   }
 }
 
+// Auto-sync fresh Fluxo and APL Contract data into Neon DB if counts are below expected
+async function syncFreshFluxoData(force = false) {
+  try {
+    const freshData = require('./fresh_fluxo_data.json');
+    const checkFluxo = await query("SELECT COUNT(*) AS cnt FROM raw.fluxo_entrada");
+    const countFluxo = parseInt(checkFluxo[0]?.cnt || '0', 10);
+
+    const checkApl = await query("SELECT COUNT(*) AS cnt FROM raw.apl_valor_contrato");
+    const countApl = parseInt(checkApl[0]?.cnt || '0', 10);
+
+    if (force || countFluxo < 450 || countApl < 110) {
+      console.log('Populating raw.fluxo_entrada and raw.apl_valor_contrato with fresh data (480 fluxo rows, 120 apl rows)...');
+      
+      await query("TRUNCATE raw.fluxo_entrada RESTART IDENTITY CASCADE");
+      for (const r of freshData.fluxo) {
+        await query(`
+          INSERT INTO raw.fluxo_entrada (
+            centro_custos, empreendimento, investidor, titulo, numero_cliente,
+            tipo_investimento, possibilidade_conversao_mutuo, status, data_pagamento, realizado, previsto
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [
+          r.centro_custos, r.empreendimento, r.investidor, r.titulo, r.numero_cliente,
+          r.tipo_investimento, r.possibilidade_conversao_mutuo, r.status, r.data_pagamento, r.realizado, r.previsto
+        ]);
+      }
+
+      await query("TRUNCATE raw.apl_valor_contrato RESTART IDENTITY CASCADE");
+      for (const r of freshData.apl) {
+        await query(`
+          INSERT INTO raw.apl_valor_contrato (
+            centro_custos, empreendimento, investidor, titulo, numero_cliente,
+            tipo_contrato, possibilidade_conversao, status, data_assinatura_contrato, area, valor_contrato
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [
+          r.centro_custos, r.empreendimento, r.investidor, r.titulo, r.numero_cliente,
+          r.tipo_contrato, r.possibilidade_conversao, r.status, r.data_assinatura_contrato, r.area, r.valor_contrato
+        ]);
+      }
+
+      console.log('Database sync complete!');
+      return { success: true, countFluxo: freshData.fluxo.length, countApl: freshData.apl.length };
+    }
+    return { success: true, skipped: true, countFluxo, countApl };
+  } catch (err) {
+    console.error('Error syncing fresh data:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// Trigger initial sync check
+syncFreshFluxoData();
+
 // ── Health Check ─────────────────────────────────────────────────
 app.get('/api/status', async (req, res) => {
   res.json({ status: 'ok', database: 'neon', runtime: 'node' });
+});
+
+app.get('/api/admin/reload-fluxo', async (req, res) => {
+  const result = await syncFreshFluxoData(true);
+  res.json(result);
 });
 
 // ── Dimensões (dropdowns) ────────────────────────────────────────
