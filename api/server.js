@@ -61,30 +61,49 @@ async function syncFreshFluxoData(force = false) {
       await query("ALTER TABLE raw.fluxo_entrada ADD COLUMN IF NOT EXISTS possibilidade_conversao_mutuo TEXT");
       
       await query("TRUNCATE raw.fluxo_entrada RESTART IDENTITY CASCADE");
-      for (const r of freshData.fluxo) {
+      if (freshData.fluxo && freshData.fluxo.length > 0) {
+        const fluxoValues = [];
+        const fluxoParams = [];
+        let pIdx = 1;
+        
+        for (const r of freshData.fluxo) {
+          fluxoValues.push(`($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++})`);
+          fluxoParams.push(
+            r.centro_custos, r.empreendimento, r.investidor, r.titulo, r.numero_cliente,
+            r.tipo_investimento, r.tipo_investimento, r.possibilidade_conversao_mutuo, r.status, r.data_pagamento, r.realizado, r.previsto
+          );
+        }
+        
         await query(`
           INSERT INTO raw.fluxo_entrada (
             centro_custos, empreendimento, investidor, titulo, numero_cliente,
             tipo_investimento, tipo_contrato, possibilidade_conversao_mutuo, status, data_pagamento, realizado, previsto
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        `, [
-          r.centro_custos, r.empreendimento, r.investidor, r.titulo, r.numero_cliente,
-          r.tipo_investimento, r.tipo_investimento, r.possibilidade_conversao_mutuo, r.status, r.data_pagamento, r.realizado, r.previsto
-        ]);
+          ) VALUES ${fluxoValues.join(', ')}
+        `, fluxoParams);
       }
 
       await query("ALTER TABLE raw.apl_valor_contrato ADD COLUMN IF NOT EXISTS valor_contrato NUMERIC");
       await query("TRUNCATE raw.apl_valor_contrato RESTART IDENTITY CASCADE");
-      for (const r of freshData.apl) {
+      
+      if (freshData.apl && freshData.apl.length > 0) {
+        const aplValues = [];
+        const aplParams = [];
+        let pIdx = 1;
+        
+        for (const r of freshData.apl) {
+          aplValues.push(`($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++})`);
+          aplParams.push(
+            r.centro_custos, r.empreendimento, r.investidor, r.titulo, r.numero_cliente,
+            r.tipo_contrato, r.possibilidade_conversao, r.status, r.data_assinatura_contrato, r.area, r.valor_contrato
+          );
+        }
+        
         await query(`
           INSERT INTO raw.apl_valor_contrato (
             centro_custos, empreendimento, investidor, titulo, numero_cliente,
             tipo_contrato, possibilidade_conversao, status, data_assinatura_contrato, area, valor_contrato
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        `, [
-          r.centro_custos, r.empreendimento, r.investidor, r.titulo, r.numero_cliente,
-          r.tipo_contrato, r.possibilidade_conversao, r.status, r.data_assinatura_contrato, r.area, r.valor_contrato
-        ]);
+          ) VALUES ${aplValues.join(', ')}
+        `, aplParams);
       }
 
       console.log('Database sync complete!');
