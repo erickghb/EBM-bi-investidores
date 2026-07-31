@@ -124,6 +124,15 @@ app.get('/api/status', async (req, res) => {
   res.json({ status: 'ok', database: 'neon', runtime: 'node' });
 });
 
+app.get('/api/landbank-rows', async (req, res) => {
+  try {
+    const rows = await query("SELECT id, titulo, nome, data_lancamento, tempo_obras_meses FROM raw.landbank ORDER BY id");
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/admin/reload-fluxo', async (req, res) => {
   const result = await syncFreshFluxoData(true);
   res.json(result);
