@@ -613,7 +613,8 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       ano: r.ano || 2024,
       mes_num: r.mes_num || 1,
       mes_name: mesNomesPTBR[r.mes_num || 1] || 'Janeiro',
-      valor_contrato: parseFloat(r.valor_contrato || 0)
+      valor_contrato: parseFloat(r.valor_contrato || 0),
+      status: r.status || 'VÁLIDO'
     }));
 
     res.json({
@@ -622,6 +623,7 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
       a_receber: aReceberParsed,
       a_receber_detalhado: aReceberDetalhadoParsed,
       contratos_assinados: contratosParsed,
+      contratos_detalhado: contratosParsed,
       kpis: {
         total_realizado: parseFloat(kpis[0]?.total_realizado || 0),
         total_a_realizar: parseFloat(kpis[0]?.total_a_realizar || 0),
