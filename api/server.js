@@ -66,10 +66,6 @@ async function syncFreshFluxoData(force = false) {
       UPDATE raw.landbank SET data_lancamento = '2027-01-06', tempo_obras_meses = '35' WHERE (titulo::text = '1727' OR nome ILIKE '%Ipê%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2027-10-22', tempo_obras_meses = '44' WHERE (titulo::text = '1748' OR nome ILIKE '%106%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2026-12-28', tempo_obras_meses = '36' WHERE (titulo::text = '1571' OR nome ILIKE '%Gran Japi%') AND (data_lancamento IS NULL OR data_lancamento = '');
-      
-      UPDATE raw.gestao_investidores
-      SET ativo_inativo = 'Ativo', status = 'Quitado'
-      WHERE id::text = '102' OR (investidor ILIKE '%AUSTRALIA%' AND valor_investido::text ILIKE '%2600000%');
     `);
 
     if (force || countFluxo < 450 || countApl < 110) {
