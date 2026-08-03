@@ -69,7 +69,7 @@ async function syncFreshFluxoData(force = false) {
       
       UPDATE raw.gestao_investidores
       SET ativo_inativo = 'Ativo', status = 'Quitado'
-      WHERE id::text = '102' OR (nome_do_investidor ILIKE '%AUSTRALIA%' AND valor_investido::text ILIKE '%2600000%');
+      WHERE id::text = '102' OR (investidor ILIKE '%AUSTRALIA%' AND valor_investido::text ILIKE '%2600000%');
     `);
 
     if (force || countFluxo < 450 || countApl < 110) {
