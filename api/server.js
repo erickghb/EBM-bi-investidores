@@ -55,10 +55,10 @@ async function syncFreshFluxoData(force = false) {
 
     // Ensure official Landbank launch dates and tempo_obras_meses are strictly set in raw.landbank
     await query(`
+      UPDATE raw.landbank SET data_lancamento = '2026-03-26', tempo_obras_meses = '38' WHERE titulo::text = '1332' OR nome ILIKE '%Trancoso%';
       UPDATE raw.landbank SET data_lancamento = '2027-03-01', tempo_obras_meses = '38' WHERE titulo::text = '1648' OR nome ILIKE '%Palmeiras%';
       UPDATE raw.landbank SET data_lancamento = '2024-10-06', tempo_obras_meses = '42' WHERE (titulo::text = '1649' OR nome ILIKE '%Mansões%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2026-06-20', tempo_obras_meses = '36' WHERE (titulo::text = '1692' OR nome ILIKE '%Cambuí%') AND (data_lancamento IS NULL OR data_lancamento = '');
-      UPDATE raw.landbank SET data_lancamento = '2024-12-25' WHERE (titulo::text = '1588' OR nome ILIKE '%Gran Six%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2026-08-18', tempo_obras_meses = '35' WHERE (titulo::text = '1620' OR nome ILIKE '%Alpes%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2027-08-18', tempo_obras_meses = '41' WHERE (titulo::text = '1662' OR nome ILIKE '%J19%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2026-05-19', tempo_obras_meses = '39' WHERE (titulo::text = '1691' OR nome ILIKE '%Gran Plaza%') AND (data_lancamento IS NULL OR data_lancamento = '');
@@ -431,7 +431,9 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
         AND UPPER(COALESCE(gi.status, '')) NOT LIKE '%DISTRAT%'
         AND (gi.tipo_scp IS NULL OR UPPER(gi.tipo_scp) NOT LIKE '%ACERTO%')
         AND (
-          lb.nome ILIKE '%Palmeiras%'
+          lb.titulo::text IN ('1332', '1648', '1649', '1692', '1620', '1662', '1691', '1714', '1727', '1748', '1571')
+          OR lb.nome ILIKE '%Trancoso%'
+          OR lb.nome ILIKE '%Palmeiras%'
           OR lb.nome ILIKE '%Mansões%'
           OR lb.nome ILIKE '%Cambuí%'
           OR lb.nome ILIKE '%Alpes%'
@@ -440,8 +442,10 @@ app.get('/api/grafico/acompanhamento', async (req, res) => {
           OR lb.nome ILIKE '%Metropolitan Marista%'
           OR lb.nome ILIKE '%Ipê%'
           OR lb.nome ILIKE '%106%'
-          OR lb.nome ILIKE '%Gran%'
+          OR lb.nome ILIKE '%Gran Japi%'
         )
+        AND lb.titulo::text <> '1588'
+        AND lb.nome NOT ILIKE '%Gran Six%'
       ORDER BY lb.nome, gi.nome_investidor
     `);
 
