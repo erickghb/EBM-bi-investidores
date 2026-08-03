@@ -62,7 +62,7 @@ async function syncFreshFluxoData(force = false) {
       UPDATE raw.landbank SET data_lancamento = '2026-08-18', tempo_obras_meses = '35' WHERE (titulo::text = '1620' OR nome ILIKE '%Alpes%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2027-08-18', tempo_obras_meses = '41' WHERE (titulo::text = '1662' OR nome ILIKE '%J19%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2026-05-19', tempo_obras_meses = '39' WHERE (titulo::text = '1691' OR nome ILIKE '%Gran Plaza%') AND (data_lancamento IS NULL OR data_lancamento = '');
-      UPDATE raw.landbank SET data_lancamento = '2027-02-13', tempo_obras_meses = '47' WHERE (titulo::text = '1714' OR nome ILIKE '%Metropolitan Marista%') AND (data_lancamento IS NULL OR data_lancamento = '');
+      UPDATE raw.landbank SET data_lancamento = '2026-09-01', tempo_obras_meses = '47' WHERE titulo::text = '1714' OR nome ILIKE '%Metropolitan Marista%';
       UPDATE raw.landbank SET data_lancamento = '2027-01-06', tempo_obras_meses = '35' WHERE (titulo::text = '1727' OR nome ILIKE '%Ipê%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2027-10-22', tempo_obras_meses = '44' WHERE (titulo::text = '1748' OR nome ILIKE '%106%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2026-12-28', tempo_obras_meses = '36' WHERE (titulo::text = '1571' OR nome ILIKE '%Gran Japi%') AND (data_lancamento IS NULL OR data_lancamento = '');
