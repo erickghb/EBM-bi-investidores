@@ -67,18 +67,9 @@ async function syncFreshFluxoData(force = false) {
       UPDATE raw.landbank SET data_lancamento = '2027-10-22', tempo_obras_meses = '44' WHERE (titulo::text = '1748' OR nome ILIKE '%106%') AND (data_lancamento IS NULL OR data_lancamento = '');
       UPDATE raw.landbank SET data_lancamento = '2026-12-28', tempo_obras_meses = '36' WHERE (titulo::text = '1571' OR nome ILIKE '%Gran Japi%') AND (data_lancamento IS NULL OR data_lancamento = '');
       
-      INSERT INTO raw.gestao_investidores (
-        id, centro_de_custo, tipo_de_scp, nome_do_investidor, valor_investido, data_assinatura, status, ativo_inativo
-      )
-      SELECT
-        102, '1145', 'SCP Investidor', 'AUSTRALIA EMPREENDIMENTOS E PARTICIPAÇÕES LTDA', 2600000, '01/07/2023', 'Quitado', 'Ativo'
-      WHERE NOT EXISTS (
-        SELECT 1 FROM raw.gestao_investidores WHERE id::text = '102' OR (nome_do_investidor ILIKE '%AUSTRALIA%' AND valor_investido::numeric = 2600000)
-      );
-
       UPDATE raw.gestao_investidores
       SET ativo_inativo = 'Ativo', status = 'Quitado'
-      WHERE id::text = '102' OR (nome_do_investidor ILIKE '%AUSTRALIA%' AND valor_investido::numeric = 2600000);
+      WHERE id::text = '102' OR (nome_do_investidor ILIKE '%AUSTRALIA%' AND valor_investido::text ILIKE '%2600000%');
     `);
 
     if (force || countFluxo < 450 || countApl < 110) {
