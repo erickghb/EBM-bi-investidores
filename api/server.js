@@ -725,7 +725,12 @@ app.get('/api/acompanhamento/receita', async (req, res) => {
 });
 
 // ── KPIs 2026 ────────────────────────────────────────────────────
-// Investimentos em 2026: soma de valor_investido com data_assinatura contendo '2026'
+// Investimentos em 2026: soma de valor_investido conforme filtros do PBIX de referência:
+//   - Data de assinatura: dezembro/2025 até dezembro/2026 (>= 2025-12-01 e <= 2026-12-31)
+//   - Exclui Acertos (tipo_scp, observacoes, status contendo 'ACERTO')
+//   - Exclui investidor GAIA HOLDING (repactuação — conforme BI de referência)
+//   - Exclui Distratados (status LIKE 'DISTRAT')
+// Valor apurado: R$ 11.524.936,30 (conferido pelo usuário após aplicação dos filtros)
 // Meta 2026: valor fixo de negócio (20 Mi — conforme definido no PBIX)
 app.get('/api/kpis/2026', async (req, res) => {
   try {
@@ -733,11 +738,13 @@ app.get('/api/kpis/2026', async (req, res) => {
       SELECT
         SUM(COALESCE(valor_investido, 0)) AS investido_2026
       FROM raw.gestao_investidores
-      WHERE data_assinatura ILIKE '%2026%'
+      WHERE data_assinatura >= '2025-12-01'
+        AND data_assinatura <= '2026-12-31'
         AND COALESCE(ativo_inativo, '') <> 'Inativo'
         AND (tipo_scp IS NULL OR UPPER(tipo_scp) NOT LIKE '%ACERTO%')
         AND (observacoes IS NULL OR UPPER(observacoes) NOT LIKE '%ACERTO%')
         AND UPPER(COALESCE(status, '')) NOT LIKE '%DISTRAT%'
+        AND UPPER(COALESCE(nome_investidor, '')) NOT LIKE '%GAIA HOLDING%'
     `);
     const investido_2026 = parseFloat(rows[0]?.investido_2026 || 0);
     const meta_2026      = 20_000_000; // Meta definida pela EBM
