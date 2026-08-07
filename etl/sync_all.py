@@ -1,24 +1,19 @@
 """
 sync_all.py
 -----------
-Sincroniza automaticamente todos os dados das listas do SharePoint (salvas pelo Power Automate Standard no OneDrive)
-e do arquivo Excel do OneDrive.
+Sincronização Portátil e Multi-Usuário (SharePoint + OneDrive -> Neon DB)
 
-Pastas monitoradas no OneDrive:
-1. JSONs do SharePoint (gerados pelo Power Automate Standard):
-   "C:\\Users\\erick.aires\\OneDrive - EBM\\Documentos\\AUTOMATE - BI"
-   - gestao_investidores_sp.json -> raw.gestao_investidores
-   - landbank_sp.json             -> raw.landbank
-   - investidores_sp.json         -> raw.investidores
+Esta versão utiliza caminhos dinâmicos do usuário (os.path.expanduser("~"))
+para que QUALQUER máquina da EBM consiga executar o script sem nenhuma alteração no código.
 
-2. Excel no OneDrive:
-   "C:\\Users\\erick.aires\\OneDrive - EBM\\Intranet EBM - EIM\\BI\\Investidores\\Fluxo entrada Investidores - Pagamentos.xlsx"
-   - Aba 'FLUXO DE ENTRADA'       -> raw.fluxo_entrada
-   - Aba 'APL-Valor do CT'         -> raw.apl_valor_contrato
+Pastas Monitoradas Dinamicamente:
+  - OneDrive/AUTOMATE - BI (arquivos gestao_investidores_sp.json, landbank_sp.json, investidores_sp.json)
+  - OneDrive/Fluxo entrada Investidores - Pagamentos.xlsx
 """
 
 import os
 import json
+import glob
 import openpyxl
 import psycopg2
 from datetime import datetime
@@ -29,10 +24,37 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-AUTOMATE_DIR = r"C:\Users\erick.aires\OneDrive - EBM\Documentos\AUTOMATE - BI"
-EXCEL_PATH = r"C:\Users\erick.aires\OneDrive - EBM\Intranet EBM - EIM\BI\Investidores\Fluxo entrada Investidores - Pagamentos.xlsx"
 JSON_CACHE_PATH = BASE_DIR / "api" / "fresh_fluxo_data.json"
 
+# ── Localizador de Caminhos Dinâmicos ────────────────────────────
+USER_HOME = os.path.expanduser("~")
+
+def find_onedrive_folder(subpath):
+    """Procura a pasta em múltiplos locais comuns de sincronização do OneDrive."""
+    candidates = [
+        os.path.join(USER_HOME, "OneDrive - EBM", subpath),
+        os.path.join(USER_HOME, "OneDrive", subpath),
+        os.path.join(USER_HOME, subpath),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+def find_file_in_onedrive(filename_pattern):
+    """Busca um arquivo por padrão glob em todo o diretório do OneDrive."""
+    onedrive_roots = [
+        os.path.join(USER_HOME, "OneDrive - EBM"),
+        os.path.join(USER_HOME, "OneDrive"),
+    ]
+    for root in onedrive_roots:
+        if os.path.exists(root):
+            matches = glob.glob(os.path.join(root, "**", filename_pattern), recursive=True)
+            if matches:
+                return matches[0]
+    return None
+
+# ── Helper Functions ──────────────────────────────────────────────
 def clean_str(val):
     if val is None:
         return None
@@ -71,12 +93,30 @@ def extract_field(item, *keys):
     return None
 
 def sync():
-    print("=" * 60)
-    print("INICIANDO SINCRONIZACAO COMPLETA (ONEDRIVE + SHAREPOINT)")
-    print("=" * 60)
+    print("=" * 65)
+    print("SINCRONIZACAO PORTATIL MULTI-USUARIO (ONEDRIVE + SHAREPOINT)")
+    print("=" * 65)
+    print(f"Usuario do Sistema: {os.getlogin()} ({USER_HOME})")
 
-    # 1. Carregar JSON de Gestão de Investidores do OneDrive (AUTOMATE - BI)
-    gestao_json_path = os.path.join(AUTOMATE_DIR, "gestao_investidores_sp.json")
+    # Localizar pastas
+    automate_dir = find_onedrive_folder(os.path.join("Documentos", "AUTOMATE - BI"))
+    if not os.path.exists(automate_dir):
+        automate_dir = find_onedrive_folder("AUTOMATE - BI")
+
+    print(f"Pasta do AUTOMATE - BI: {automate_dir}")
+
+    # Localizar arquivo Excel de Fluxo e APL
+    excel_path = find_file_in_onedrive("Fluxo entrada Investidores - Pagamentos.xlsx")
+    if not excel_path:
+        excel_path = os.path.join(
+            USER_HOME, "OneDrive - EBM",
+            "Intranet EBM - EIM", "BI", "Investidores",
+            "Fluxo entrada Investidores - Pagamentos.xlsx"
+        )
+    print(f"Arquivo Excel do OneDrive: {excel_path}")
+
+    # 1. Processar Gestão de Investidores (gestao_investidores_sp.json)
+    gestao_json_path = os.path.join(automate_dir, "gestao_investidores_sp.json")
     gestao_rows = []
     if os.path.exists(gestao_json_path):
         try:
@@ -105,20 +145,43 @@ def sync():
                     vlr_inv, dt_ass, obs, comissao, status, ativo_inativo,
                     email, telefones, status_acerto
                 ))
-
-            print(f"[1/3] SharePoint Gestao de Investidores: {len(gestao_rows)} itens lidos do arquivo JSON!")
+            print(f"[1/3] SharePoint Gestao de Investidores: {len(gestao_rows)} itens lidos.")
         except Exception as e:
             print(f"[AVISO] Erro ao ler {gestao_json_path}: {e}")
     else:
-        print(f"[1/3] {gestao_json_path} ainda nao encontrado.")
+        print(f"[1/3] {gestao_json_path} ainda nao gerado pelo Power Automate.")
 
-    # 2. Ler Excel de Fluxo e APL
+    # 2. Processar Landbank (landbank_sp.json)
+    landbank_json_path = os.path.join(automate_dir, "landbank_sp.json")
+    landbank_rows = []
+    if os.path.exists(landbank_json_path):
+        try:
+            with open(landbank_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                items = data.get("items", data) if isinstance(data, dict) else data
+
+            for item in items:
+                titulo = clean_str(extract_field(item, "Title", "titulo", "CentroDeCusto"))
+                nome = clean_str(extract_field(item, "Nome", "nome", "Imovel"))
+                endereco = clean_str(extract_field(item, "Endereco", "endereco"))
+                uf = clean_str(extract_field(item, "UF", "uf"))
+                linha = clean_str(extract_field(item, "Linha", "linha"))
+                tipologia = clean_str(extract_field(item, "Tipologia", "tipologia"))
+                status = clean_str(extract_field(item, "Status", "status"))
+                apl = clean_str(extract_field(item, "AplEmpreendimento", "apl_empreendimento"))
+
+                landbank_rows.append((titulo, nome, endereco, uf, linha, tipologia, status, apl))
+            print(f"[2/3] SharePoint Landbank: {len(landbank_rows)} empreendimentos lidos.")
+        except Exception as e:
+            print(f"[AVISO] Erro ao ler {landbank_json_path}: {e}")
+
+    # 3. Ler Excel de Fluxo e APL
     fluxo_rows, apl_rows = [], []
     fluxo_json, apl_json = [], []
 
-    if os.path.exists(EXCEL_PATH):
-        print(f"[2/3] Lendo Excel do OneDrive:\n   {EXCEL_PATH}")
-        wb = openpyxl.load_workbook(EXCEL_PATH, read_only=True, data_only=True)
+    if os.path.exists(excel_path):
+        print(f"[3/3] Lendo Excel do OneDrive:\n   {excel_path}")
+        wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
 
         if "FLUXO DE ENTRADA" in wb.sheetnames:
             ws_fluxo = wb["FLUXO DE ENTRADA"]
@@ -168,8 +231,8 @@ def sync():
         wb.close()
         print(f"   -> Fluxo: {len(fluxo_rows)} parcelas | APL: {len(apl_rows)} contratos.")
 
-    # 3. Atualizar cache JSON
-    print(f"[3/3] Atualizando arquivo de cache fresh_fluxo_data.json...")
+    # 4. Atualizar cache JSON
+    print("Atualizando arquivo de cache fresh_fluxo_data.json...")
     cache_data = {
         "fluxo": fluxo_json,
         "apl": apl_json,
@@ -178,7 +241,7 @@ def sync():
     with open(JSON_CACHE_PATH, "w", encoding="utf-8") as f:
         json.dump(cache_data, f, ensure_ascii=False, indent=2)
 
-    # 4. Tentar atualizar Neon Database se conexao disponivel
+    # 5. Tentar atualizar Neon Database se conexão disponível
     if DATABASE_URL:
         try:
             conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
@@ -194,7 +257,17 @@ def sync():
                         email, telefones, status_acerto
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, gestao_rows)
-                print(f"   -> raw.gestao_investidores atualizado com {len(gestao_rows)} registros no Neon DB!")
+                print(f"   -> raw.gestao_investidores atualizado ({len(gestao_rows)} registros no Neon DB)")
+
+            # Landbank
+            if landbank_rows:
+                cur.execute("TRUNCATE raw.landbank RESTART IDENTITY CASCADE")
+                cur.executemany("""
+                    INSERT INTO raw.landbank (
+                        titulo, nome, endereco, uf, linha, tipologia, status, apl_empreendimento
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, landbank_rows)
+                print(f"   -> raw.landbank atualizado ({len(landbank_rows)} registros no Neon DB)")
 
             # Fluxo
             if fluxo_rows:
