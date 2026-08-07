@@ -134,11 +134,6 @@ async function syncFreshFluxoData(force = false) {
 // Trigger initial sync check
 syncFreshFluxoData();
 
-// ── Health Check ─────────────────────────────────────────────────
-app.get('/api/status', async (req, res) => {
-  res.json({ status: 'ok', database: 'neon', runtime: 'node' });
-});
-
 app.get('/api/landbank-rows', async (req, res) => {
   try {
     const rows = await query("SELECT id, titulo, nome, data_lancamento, tempo_obras_meses FROM raw.landbank ORDER BY id");
